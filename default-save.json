@@ -1,0 +1,248 @@
+{
+  "version": 2,
+  "updatedAt": 1787803460622,
+  "sites": [
+    {
+      "id": "msyj8wbnxeq91p",
+      "name": "YouTube",
+      "url": "https://www.youtube.com/"
+    },
+    {
+      "id": "rmsquyelt2",
+      "name": "Google Maps",
+      "url": "https://maps.google.com/"
+    },
+    {
+      "id": "rmsquyelt5",
+      "name": "Google Drive",
+      "url": "https://drive.google.com/drive/home"
+    },
+    {
+      "id": "msyj9fqm5xpj1y",
+      "name": "Black Flag",
+      "url": "https://docs.google.com/spreadsheets/d/177cnuV9QlHmO6bAGdO1xgN04xnQJCAuLOcj0ckmy4Yk/edit?gid=1167406126#gid=1167406126"
+    },
+    {
+      "id": "rmsquyeltl",
+      "name": "Google Docs",
+      "url": "http://docs.google.com"
+    },
+    {
+      "id": "rmsquyeltk",
+      "name": "Google Translate",
+      "url": "https://translate.google.co.in/?sl=auto&tl=en&op=translate"
+    },
+    {
+      "id": "rmsquyeltt",
+      "name": "Gmail",
+      "url": "https://mail.google.com/mail/u/3/#inbox"
+    },
+    {
+      "id": "rmsquyelt6",
+      "name": "Tuta Mail",
+      "url": "https://app.tuta.com/mail/Ohr3gNy--F-9"
+    },
+    {
+      "id": "rmsquyelt9",
+      "name": "WhatsApp",
+      "url": "https://web.whatsapp.com/"
+    },
+    {
+      "id": "rmsquyelt4",
+      "name": "DeepSeek",
+      "url": "https://chat.deepseek.com/"
+    },
+    {
+      "id": "rmsquyelta",
+      "name": "x.com",
+      "url": "https://x.com/"
+    },
+    {
+      "id": "rmsquyeltb",
+      "name": "ImageKit Dashboard",
+      "url": "https://imagekit.io/dashboard/media-library/L0hBWkVM"
+    },
+    {
+      "id": "rmsquyeltd",
+      "name": "Cloudflare R2",
+      "url": "https://dash.cloudflare.com/a30112ac3e6966496265c81adcab8fcf/r2/default/buckets/jigar"
+    },
+    {
+      "id": "rmsquyeltc",
+      "name": "Instagram",
+      "url": "https://www.instagram.com/"
+    },
+    {
+      "id": "rmsquyeltf",
+      "name": "Pinterest",
+      "url": "https://www.pinterest.com/"
+    },
+    {
+      "id": "rmsquyeltz",
+      "name": "Reddit",
+      "url": "http://www.reddit.com",
+      "icon": "https://icons.duckduckgo.com/ip3/www.reddit.com.ico"
+    },
+    {
+      "id": "rmsquyelt7",
+      "name": "GitHub",
+      "url": "https://github.com/FirozChauhan"
+    },
+    {
+      "id": "msr0vjuu5xvqal",
+      "name": "Monitors | UptimeRobot",
+      "url": "https://dashboard.uptimerobot.com/monitors",
+      "icon": "https://www.google.com/s2/favicons?domain=dashboard.uptimerobot.com&sz=256"
+    },
+    {
+      "id": "rmsquyeltp",
+      "name": "Neon",
+      "url": "https://console.neon.tech/app"
+    },
+    {
+      "id": "rmsquyelt8",
+      "name": "Javascript Compiler",
+      "url": "https://nextleap.app/online-compiler/javascript-programming"
+    },
+    {
+      "id": "rmsquyeltr",
+      "name": "GroqCloud",
+      "url": "https://console.groq.com/home"
+    },
+    {
+      "id": "rmsquyelto",
+      "name": "Render",
+      "url": "https://dashboard.render.com/"
+    },
+    {
+      "id": "rmsquyelu17",
+      "name": "Streamtape",
+      "url": "https://streamtape.com/accpanel"
+    },
+    {
+      "id": "mt2um64epvlc68",
+      "name": "Agentic Infrastructure - Vercel",
+      "url": "http://vercel.com/"
+    },
+    {
+      "id": "rmsquyelu18",
+      "name": "EXT",
+      "url": "https://ext.to/"
+    },
+    {
+      "id": "rmsquyelt10",
+      "name": "PornPics",
+      "url": "https://www.pornpics.com/"
+    },
+    {
+      "id": "rmsquyelt11",
+      "name": "Emochi",
+      "url": "https://emochi.com/"
+    },
+    {
+      "id": "rmsquyelt12",
+      "name": "AI Character Editor",
+      "url": "https://avakson.github.io/character-editor/"
+    },
+    {
+      "id": "rmsquyelt13",
+      "name": "Elite Babes",
+      "url": "https://www.elitebabes.com/"
+    },
+    {
+      "id": "rmsquyelu14",
+      "name": "ViperGirls",
+      "url": "https://viper.to/forum.php"
+    },
+    {
+      "id": "rmsquyelu15",
+      "name": "character.ai",
+      "url": "https://character.ai/"
+    },
+    {
+      "id": "rmsquyelu19",
+      "name": "cookii.ai",
+      "url": "https://cookii.ai/"
+    },
+    {
+      "id": "rmsquyeltu",
+      "name": "XXXClub",
+      "url": "https://xxxclub.to/"
+    },
+    {
+      "id": "rmsquyeltn",
+      "name": "AnkerGames",
+      "url": "https://ankergames.net/"
+    },
+    {
+      "id": "rmsquyeltg",
+      "name": "Wallhaven",
+      "url": "https://wallhaven.cc/"
+    },
+    {
+      "id": "rmsquyeltx",
+      "name": "DropMMS",
+      "url": "https://dropmms.co/forum/2-desi-new-videos-hd-sd/"
+    },
+    {
+      "id": "rmsquyeltv",
+      "name": "RARBG",
+      "url": "https://rargb.to/"
+    },
+    {
+      "id": "rmsquyelty",
+      "name": "Masti Raja",
+      "url": "https://mastiraja.com/"
+    }
+  ],
+  "settings": {
+    "iconSize": 68,
+    "colGap": 28,
+    "rowGap": 28,
+    "cols": 8,
+    "rows": 3,
+    "bkWidth": 504,
+    "drWidth": 504,
+    "blur": 0,
+    "labelOp": 100,
+    "labels": false,
+    "labelColor": "#f5f5f5",
+    "mono": false,
+    "wallMono": false
+  },
+  "walls": {
+    "v": 9,
+    "key": "https://w.wallhaven.cc/full/yq/wallhaven-yq9eex.png",
+    "list": [
+      "https://w.wallhaven.cc/full/6l/wallhaven-6ly77w.jpg",
+      "https://w.wallhaven.cc/full/3q/wallhaven-3q25r9.jpg",
+      "https://w.wallhaven.cc/full/yq/wallhaven-yq9eex.png",
+      "https://w.wallhaven.cc/full/3q/wallhaven-3q22p6.jpg",
+      "https://w.wallhaven.cc/full/je/wallhaven-jedkly.jpg",
+      "https://w.wallhaven.cc/full/gw/wallhaven-gwdqwq.jpg",
+      "https://w.wallhaven.cc/full/qr/wallhaven-qrodr7.jpg",
+      "https://w.wallhaven.cc/full/ml/wallhaven-mlylyk.jpg",
+      "https://w.wallhaven.cc/full/ly/wallhaven-lydj9l.jpg",
+      "https://w.wallhaven.cc/full/1q/wallhaven-1q2ldw.jpg"
+    ],
+    "lastRefresh": 1787798821855,
+    "purity": "100",
+    "category": "100",
+    "apikey": "",
+    "favs": [
+      "https://w.wallhaven.cc/full/21/wallhaven-21opwx.jpg",
+      "https://w.wallhaven.cc/full/8g/wallhaven-8gj5j2.png",
+      "https://w.wallhaven.cc/full/7j/wallhaven-7jlgjo.jpg",
+      "https://w.wallhaven.cc/full/og/wallhaven-ogjxz5.png",
+      "https://w.wallhaven.cc/full/8g/wallhaven-8gj98y.png",
+      "https://w.wallhaven.cc/full/6l/wallhaven-6lyop6.jpg",
+      "https://w.wallhaven.cc/full/1q/wallhaven-1q2p3v.png",
+      "https://w.wallhaven.cc/full/yq/wallhaven-yq9jeg.png",
+      "https://w.wallhaven.cc/full/vp/wallhaven-vpe2vm.jpg",
+      "https://w.wallhaven.cc/full/9o/wallhaven-9ogkmk.jpg",
+      "https://w.wallhaven.cc/full/yq/wallhaven-yq2zwl.png",
+      "https://w.wallhaven.cc/full/yq/wallhaven-yq9eex.png"
+    ],
+    "safe": ""
+  }
+}

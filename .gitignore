@@ -1,0 +1,15 @@
+.env
+node_modules/
+.freebuff/
+
+# OS / editor cruft
+.DS_Store
+*.log
+
+# js/config.js holds the gist id + GitHub token + wallhaven key. It is GENERATED
+# from .env (which is also gitignored) and must NEVER be committed — GitHub push
+# protection blocks any token that lands in a commit. See js/config.example.js.
+js/config.js
+
+# release zips
+/dist/

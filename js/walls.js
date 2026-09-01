@@ -1,0 +1,1187 @@
+"use strict";
+(() => {
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __commonJS = (cb, mod) => function __require() {
+    try {
+      return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+    } catch (e) {
+      throw mod = 0, e;
+    }
+  };
+  var require_walls = __commonJS({
+    "src/walls.ts"() {
+      (function() {
+        "use strict";
+        const LS_KEY = "glisters-walls";
+        const POOL_SIZE = 10;
+        const FAV_MAX = 60;
+        const REFRESH_MS = 24 * 60 * 60 * 1e3;
+        const WH_SEARCH = "https://wallhaven.cc/api/v1/search?sorting=toplist&topRange=1M&per_page=24";
+        const PURE_OPTS = ["100", "110", "111"];
+        const CAT_OPTS = ["100", "010", "001"];
+        const KEY_RE = /^[A-Za-z0-9]{8,64}$/;
+        function cleanKey(v) {
+          const k = String(v == null ? "" : v).trim();
+          return k ? KEY_RE.test(k) ? k : "" : "";
+        }
+        const CFG = window.CONFIG || {};
+        const CFG_KEY = typeof CFG.wallhavenKey === "string" ? cleanKey(CFG.wallhavenKey) : "";
+        const FALLBACK = [
+          "photo-1506744038136-46273834b3fb",
+          "photo-1470071459604-3b5ec3a7fe05",
+          "photo-1441974231531-c6227db76b6e",
+          "photo-1519681393784-d120267933ba",
+          "photo-1497436072909-60f360e1d4b1",
+          "photo-1506905925346-21bda4d32df4",
+          "photo-1447752875215-b2761acb3c5d",
+          "photo-1501785888041-af3ef285b470",
+          "photo-1472214103451-9374bd1c798e",
+          "photo-1469474968028-56623f02e42e"
+        ].map(function(id) {
+          return "https://images.unsplash.com/" + id + "?auto=format&fit=crop&w=1920&q=80";
+        });
+        const WALL_FALLBACK = [
+          "https://w.wallhaven.cc/full/k8/wallhaven-k8d637.jpg",
+          "https://w.wallhaven.cc/full/vp/wallhaven-vped5m.jpg",
+          "https://w.wallhaven.cc/full/21/wallhaven-212le9.jpg",
+          "https://w.wallhaven.cc/full/7j/wallhaven-7jll7v.jpg",
+          "https://w.wallhaven.cc/full/3q/wallhaven-3q2lxd.jpg",
+          "https://w.wallhaven.cc/full/po/wallhaven-pogp1p.png",
+          "https://w.wallhaven.cc/full/e8/wallhaven-e82pdk.jpg",
+          "https://w.wallhaven.cc/full/1q/wallhaven-1q2d61.png",
+          "https://w.wallhaven.cc/full/ly/wallhaven-lydl92.png",
+          "https://w.wallhaven.cc/full/8g/wallhaven-8gjpkj.jpg",
+          "https://w.wallhaven.cc/full/yq/wallhaven-yq92yl.jpg",
+          "https://w.wallhaven.cc/full/og/wallhaven-ogj62l.jpg",
+          "https://w.wallhaven.cc/full/yq/wallhaven-yq92kg.jpg",
+          "https://w.wallhaven.cc/full/5y/wallhaven-5y37x9.jpg",
+          "https://w.wallhaven.cc/full/6l/wallhaven-6ly6j6.jpg",
+          "https://w.wallhaven.cc/full/ml/wallhaven-mlyeqk.jpg",
+          "https://w.wallhaven.cc/full/yq/wallhaven-yq9577.jpg",
+          "https://w.wallhaven.cc/full/rq/wallhaven-rq6ylj.jpg",
+          "https://w.wallhaven.cc/full/gw/wallhaven-gwdrv3.jpg",
+          "https://w.wallhaven.cc/full/k8/wallhaven-k8dyrd.jpg",
+          "https://w.wallhaven.cc/full/zp/wallhaven-zp9kej.png",
+          "https://w.wallhaven.cc/full/1q/wallhaven-1q26lg.jpg",
+          "https://w.wallhaven.cc/full/qr/wallhaven-qro7yq.png",
+          "https://w.wallhaven.cc/full/rq/wallhaven-rq65wm.jpg",
+          "https://w.wallhaven.cc/full/7j/wallhaven-7jl5x3.jpg",
+          "https://w.wallhaven.cc/full/gw/wallhaven-gwded3.jpg",
+          "https://w.wallhaven.cc/full/zp/wallhaven-zp9k2o.jpg",
+          "https://w.wallhaven.cc/full/qr/wallhaven-qro75l.jpg",
+          "https://w.wallhaven.cc/full/9o/wallhaven-9ogql1.png",
+          "https://w.wallhaven.cc/full/og/wallhaven-ogjz97.jpg",
+          "https://w.wallhaven.cc/full/5y/wallhaven-5y32l5.jpg",
+          "https://w.wallhaven.cc/full/yq/wallhaven-yq9y7g.jpg",
+          "https://w.wallhaven.cc/full/je/wallhaven-jedm8y.jpg",
+          "https://w.wallhaven.cc/full/ly/wallhaven-lyd592.jpg",
+          "https://w.wallhaven.cc/full/gw/wallhaven-gwdozd.jpg",
+          "https://w.wallhaven.cc/full/k8/wallhaven-k8dp3m.jpg",
+          "https://w.wallhaven.cc/full/je/wallhaven-jedm9y.jpg",
+          "https://w.wallhaven.cc/full/zp/wallhaven-zp9e7j.jpg",
+          "https://w.wallhaven.cc/full/e8/wallhaven-e82mv8.jpg",
+          "https://w.wallhaven.cc/full/po/wallhaven-pogdm9.jpg",
+          "https://w.wallhaven.cc/full/je/wallhaven-jed2lm.jpg",
+          "https://w.wallhaven.cc/full/yq/wallhaven-yq91xk.jpg",
+          "https://w.wallhaven.cc/full/ly/wallhaven-lydl8r.jpg",
+          "https://w.wallhaven.cc/full/qr/wallhaven-qroqdd.jpg",
+          "https://w.wallhaven.cc/full/7j/wallhaven-7jlere.jpg",
+          "https://w.wallhaven.cc/full/e8/wallhaven-e82kqw.png",
+          "https://w.wallhaven.cc/full/po/wallhaven-pog69e.jpg",
+          "https://w.wallhaven.cc/full/og/wallhaven-ogjr79.jpg",
+          "https://w.wallhaven.cc/full/d8/wallhaven-d8dm2l.jpg",
+          "https://w.wallhaven.cc/full/e8/wallhaven-e82kxk.jpg",
+          "https://w.wallhaven.cc/full/ml/wallhaven-mlyj61.png",
+          "https://w.wallhaven.cc/full/k8/wallhaven-k8d597.jpg",
+          "https://w.wallhaven.cc/full/og/wallhaven-ogjow9.jpg",
+          "https://w.wallhaven.cc/full/vp/wallhaven-vpevvm.jpg",
+          "https://w.wallhaven.cc/full/w5/wallhaven-w5xrvp.jpg",
+          "https://w.wallhaven.cc/full/ly/wallhaven-lydlgl.jpg",
+          "https://w.wallhaven.cc/full/9o/wallhaven-9ogy71.jpg",
+          "https://w.wallhaven.cc/full/k8/wallhaven-k8dyqq.png",
+          "https://w.wallhaven.cc/full/1q/wallhaven-1q26zv.png",
+          "https://w.wallhaven.cc/full/7j/wallhaven-7jl2oy.png",
+          "https://w.wallhaven.cc/full/gw/wallhaven-gwdm3e.jpg",
+          "https://w.wallhaven.cc/full/vp/wallhaven-vpe1e8.png",
+          "https://w.wallhaven.cc/full/3q/wallhaven-3q286d.jpg",
+          "https://w.wallhaven.cc/full/yq/wallhaven-yq9eok.jpg",
+          "https://w.wallhaven.cc/full/7j/wallhaven-7jlm7o.png",
+          "https://w.wallhaven.cc/full/ml/wallhaven-mlylyk.jpg",
+          "https://w.wallhaven.cc/full/ml/wallhaven-mlyl58.jpg",
+          "https://w.wallhaven.cc/full/rq/wallhaven-rq6x61.jpg",
+          "https://w.wallhaven.cc/full/k8/wallhaven-k8dd6m.jpg",
+          "https://w.wallhaven.cc/full/7j/wallhaven-7jll33.jpg",
+          "https://w.wallhaven.cc/full/21/wallhaven-212x2m.jpg",
+          "https://w.wallhaven.cc/full/6l/wallhaven-6lyp66.png",
+          "https://w.wallhaven.cc/full/yq/wallhaven-yq9lk7.jpg",
+          "https://w.wallhaven.cc/full/9o/wallhaven-9ogov8.png",
+          "https://w.wallhaven.cc/full/1q/wallhaven-1q2qpv.jpg",
+          "https://w.wallhaven.cc/full/zp/wallhaven-zp9y2g.jpg",
+          "https://w.wallhaven.cc/full/je/wallhaven-jedjl5.jpg",
+          "https://w.wallhaven.cc/full/8g/wallhaven-8gjr12.jpg",
+          "https://w.wallhaven.cc/full/7j/wallhaven-7jlrg3.jpg",
+          "https://w.wallhaven.cc/full/zp/wallhaven-zp9qpj.png",
+          "https://w.wallhaven.cc/full/e8/wallhaven-e821rr.jpg",
+          "https://w.wallhaven.cc/full/8g/wallhaven-8gj1l2.png",
+          "https://w.wallhaven.cc/full/rq/wallhaven-rq6l37.png",
+          "https://w.wallhaven.cc/full/21/wallhaven-212dx9.jpg",
+          "https://w.wallhaven.cc/full/w5/wallhaven-w5xrrp.jpg",
+          "https://w.wallhaven.cc/full/5y/wallhaven-5y37q8.png",
+          "https://w.wallhaven.cc/full/qr/wallhaven-qroy6d.jpg",
+          "https://w.wallhaven.cc/full/gw/wallhaven-gwdem3.png",
+          "https://w.wallhaven.cc/full/zp/wallhaven-zp9wwj.jpg",
+          "https://w.wallhaven.cc/full/yq/wallhaven-yq968l.jpg",
+          "https://w.wallhaven.cc/full/e8/wallhaven-e823zw.jpg",
+          "https://w.wallhaven.cc/full/9o/wallhaven-9og8dw.png",
+          "https://w.wallhaven.cc/full/e8/wallhaven-e82pkk.jpg",
+          "https://w.wallhaven.cc/full/8g/wallhaven-8gj5j2.png",
+          "https://w.wallhaven.cc/full/ly/wallhaven-lydy3q.jpg",
+          "https://w.wallhaven.cc/full/gw/wallhaven-gwdw77.png",
+          "https://w.wallhaven.cc/full/6l/wallhaven-6lyy66.jpg"
+        ];
+        let state = {
+          key: null,
+          list: [],
+          lastRefresh: 0,
+          purity: "100",
+          category: "100",
+          apikey: "",
+          favs: [],
+          safe: ""
+        };
+        let appCommit = null;
+        let refreshing = false;
+        let lastWallError = "";
+        const wallEl = document.getElementById("wallLayer") || (function() {
+          const d = document.createElement("div");
+          d.id = "wallLayer";
+          document.body.insertBefore(d, document.body.firstChild);
+          return d;
+        })();
+        const grid = document.getElementById("wallGrid");
+        const favGrid = document.getElementById("favGrid");
+        const favAddBtn = document.getElementById("favAdd");
+        const favStatus = document.getElementById("favStatus");
+        const safeSetBtn = document.getElementById("safeSet");
+        const safeApplyBtn = document.getElementById("safeApply");
+        const safeStatus = document.getElementById("safeStatus");
+        const downloadBtn = document.getElementById("wallDownload");
+        const downloadStatus = document.getElementById("wallDownloadStatus");
+        const addInput = document.getElementById("wallAddInput");
+        const addBtn = document.getElementById("wallAdd");
+        const reloadBtn = document.getElementById("wallReload");
+        const reloadStatus = document.getElementById("wallStatus");
+        const loadingDots = document.getElementById("wallLoading");
+        function el(tag, cls, text) {
+          const n = document.createElement(tag);
+          if (cls) n.className = cls;
+          if (text != null) n.textContent = text;
+          return n;
+        }
+        function isUrl(v) {
+          return /^https?:\/\/[^\s]+$/i.test(v);
+        }
+        function rnd(n) {
+          return Math.floor(Math.random() * n);
+        }
+        function shuffle(a) {
+          const b = a.slice();
+          for (let i = b.length - 1; i > 0; i--) {
+            const j = rnd(i + 1);
+            const t = b[i];
+            b[i] = b[j];
+            b[j] = t;
+          }
+          return b;
+        }
+        function setLoading(on) {
+          if (!loadingDots) return;
+          loadingDots.hidden = !on;
+          if (reloadBtn) reloadBtn.disabled = on;
+        }
+        function photoKey(u) {
+          const m = /wallhaven-([a-z0-9]+)\.(?:jpg|png)$/i.exec(u);
+          if (m) return "wh:" + m[1].toLowerCase();
+          const um = /photo-\d+-[0-9a-f]+/i.exec(u);
+          if (um) return "up:" + um[0].toLowerCase();
+          return u;
+        }
+        function isBuiltin(u) {
+          return /w\.wallhaven\.cc\/full\//.test(u) || FALLBACK.indexOf(u) !== -1;
+        }
+        function dataDoc() {
+          return {
+            v: 9,
+            key: state.key,
+            list: state.list,
+            lastRefresh: state.lastRefresh,
+            purity: state.purity,
+            category: state.category,
+            apikey: state.apikey,
+            favs: state.favs,
+            safe: state.safe
+          };
+        }
+        function unionFavs(a, b) {
+          const seen = {};
+          const out = [];
+          const all = (a || []).concat(b || []);
+          for (let i = 0; i < all.length && out.length < FAV_MAX; i++) {
+            const u = all[i];
+            if (isUrl(u) && !seen[u]) {
+              seen[u] = true;
+              out.push(u);
+            }
+          }
+          return out;
+        }
+        function keepFavs(list) {
+          const merged = unionFavs(state.favs, list);
+          if (merged.length === state.favs.length) return false;
+          state.favs = merged;
+          persistData();
+          renderFavs();
+          return true;
+        }
+        function persistData() {
+          const d = dataDoc();
+          try {
+            localStorage.setItem(LS_KEY, JSON.stringify(d));
+          } catch {
+          }
+          if (window.chrome && chrome.storage && chrome.storage.local) {
+            const o = {};
+            o[LS_KEY] = d;
+            try {
+              chrome.storage.local.set(o);
+            } catch {
+            }
+          }
+        }
+        function touch() {
+          persistData();
+          if (appCommit) appCommit();
+        }
+        function setData(d) {
+          const savedList = d && Array.isArray(d.list) ? d.list.filter(isUrl) : [];
+          state.list = savedList.length ? savedList.slice(0, POOL_SIZE) : FALLBACK.slice();
+          state.key = d && typeof d.key === "string" && (d.key === "" || isUrl(d.key)) ? d.key : null;
+          state.lastRefresh = d && typeof d.lastRefresh === "number" ? d.lastRefresh : 0;
+          state.purity = d && PURE_OPTS.indexOf(String(d.purity)) !== -1 ? String(d.purity) : "100";
+          state.category = d && CAT_OPTS.indexOf(String(d.category)) !== -1 ? String(d.category) : "100";
+          state.apikey = d && typeof d.apikey === "string" ? cleanKey(d.apikey) : "";
+          if (!state.apikey) state.apikey = CFG_KEY;
+          state.favs = d && Array.isArray(d.favs) ? d.favs.filter(isUrl).slice(0, FAV_MAX) : [];
+          state.safe = d && typeof d.safe === "string" ? safeWallUrl(d.safe) : "";
+          if (d && d.v < 6) {
+            state.list = [];
+            state.key = null;
+            state.lastRefresh = 0;
+          }
+        }
+        function adopt(d) {
+          const incoming = d && typeof d === "object" ? d : {};
+          const prevKey = state.key, prevList = state.list, prevFavs = state.favs;
+          const prevPurity = state.purity, prevCategory = state.category, prevKeyOpt = state.apikey;
+          const prevSafe = state.safe;
+          const hasIncoming = !!incoming.key || Array.isArray(incoming.list) && incoming.list.length > 0;
+          setData(incoming);
+          if (!hasIncoming && (prevKey || prevList.length)) {
+            state.key = prevKey;
+            state.list = prevList;
+            state.favs = prevFavs;
+            state.purity = prevPurity;
+            state.category = prevCategory;
+            state.apikey = prevKeyOpt;
+            state.safe = prevSafe;
+          }
+          state.favs = unionFavs(prevFavs, state.favs);
+          persistData();
+          renderGrid();
+          renderFavs();
+          renderFilterButtons();
+          applyBackground();
+          pruneBlobs(state.list);
+          prefetchPool();
+        }
+        function thumbUrl(u) {
+          const m = /wallhaven-([a-z0-9]+)\.(?:jpg|png)$/i.exec(u);
+          if (m) {
+            const id = m[1], sub = id.slice(0, 2);
+            return "https://th.wallhaven.cc/lg/" + sub + "/" + id + ".jpg";
+          }
+          if (u.indexOf("images.unsplash.com") !== -1) {
+            return u.replace(/w=\d+/, "w=220").replace(/q=\d+/, "q=60");
+          }
+          return u;
+        }
+        const CACHE_NAME = "glisters-walls-v1";
+        let cachePromise = null;
+        const blobUrls = {};
+        const blobPromises = {};
+        const cachedUrls = {};
+        function openCache() {
+          if (typeof caches === "undefined") return Promise.resolve(null);
+          if (!cachePromise) cachePromise = caches.open(CACHE_NAME);
+          return cachePromise;
+        }
+        function cacheImage(url) {
+          return openCache().then(function(cache) {
+            if (!cache) return false;
+            return cache.match(url).then(function(hit) {
+              if (hit) {
+                cachedUrls[url] = true;
+                return true;
+              }
+              return fetch(url, { cache: "force-cache" }).then(function(r) {
+                if (!r.ok) return false;
+                return cache.put(url, r).then(function() {
+                  cachedUrls[url] = true;
+                  return true;
+                });
+              }).catch(function() {
+                return false;
+              });
+            });
+          }).catch(function() {
+            return false;
+          });
+        }
+        function materialize(url) {
+          if (blobUrls[url]) return Promise.resolve(blobUrls[url]);
+          if (blobPromises[url]) return blobPromises[url];
+          blobPromises[url] = openCache().then(function(cache) {
+            if (!cache) return null;
+            return cache.match(url).then(function(resp) {
+              return resp ? resp.blob() : null;
+            });
+          }).then(function(blob) {
+            if (!blob) return null;
+            if (state.list.indexOf(url) === -1 && url !== state.key) {
+              try {
+                URL.revokeObjectURL(URL.createObjectURL(blob));
+              } catch {
+              }
+              return null;
+            }
+            if (blobUrls[url]) try {
+              URL.revokeObjectURL(blobUrls[url]);
+            } catch {
+            }
+            blobUrls[url] = URL.createObjectURL(blob);
+            return blobUrls[url];
+          }).catch(function() {
+            return null;
+          });
+          return blobPromises[url];
+        }
+        const preloading = {};
+        function preloadImage(url) {
+          if (preloading[url]) return;
+          preloading[url] = true;
+          const im = new Image();
+          let done = false;
+          im.referrerPolicy = "no-referrer";
+          im.onload = im.onerror = function() {
+            if (done) return;
+            done = true;
+            im.src = "";
+            delete preloading[url];
+          };
+          im.src = url;
+        }
+        function prefetchPool() {
+          const urls = state.list.slice();
+          let i = 0, active = 0;
+          function work(url) {
+            active++;
+            preloadImage(url);
+            cacheImage(url).then(function() {
+              active--;
+              if (url === state.key) applyBackground();
+              step();
+            });
+          }
+          function step() {
+            while (active < 3 && i < urls.length) work(urls[i++]);
+          }
+          step();
+        }
+        function pruneBlobs(keep) {
+          const keepSet = {};
+          (keep || []).forEach(function(u) {
+            keepSet[u] = true;
+          });
+          state.favs.forEach(function(u) {
+            keepSet[u] = true;
+          });
+          if (state.safe) keepSet[state.safe] = true;
+          const drop = [];
+          Object.keys(blobUrls).forEach(function(u) {
+            if (keepSet[u] || u === state.key) return;
+            try {
+              URL.revokeObjectURL(blobUrls[u]);
+            } catch {
+            }
+            delete blobUrls[u];
+            drop.push(u);
+          });
+          Object.keys(cachedUrls).forEach(function(u) {
+            if (keepSet[u] || u === state.key) return;
+            delete cachedUrls[u];
+            drop.push(u);
+          });
+          if (drop.length && typeof caches !== "undefined") {
+            openCache().then(function(cache) {
+              if (!cache) return;
+              drop.forEach(function(u) {
+                try {
+                  cache.delete(u).catch(function() {
+                  });
+                } catch {
+                }
+              });
+            }).catch(function() {
+            });
+          }
+        }
+        function whUrl() {
+          let u = WH_SEARCH + "&purity=" + state.purity + "&categories=" + state.category;
+          if (state.apikey) u += "&apikey=" + state.apikey;
+          return u;
+        }
+        function wallPage(page) {
+          const url = whUrl() + "&page=" + page;
+          const attempt = function() {
+            return runtimeWallFetch(url).then(function(j) {
+              if (!j || typeof j !== "object") throw new Error("bad wallhaven response");
+              return j;
+            });
+          };
+          return attempt().catch(function() {
+            return new Promise(function(resolve2) {
+              setTimeout(function() {
+                resolve2(attempt());
+              }, 1200);
+            });
+          });
+        }
+        function runtimeWallFetch(url) {
+          if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
+            const viaBackground = chrome.runtime.sendMessage({ type: "wallFetch", url }).then(function(resp) {
+              if (resp && resp.ok && resp.data) return resp.data;
+              throw new Error(resp && resp.error ? resp.error : "wall fetch failed");
+            });
+            return viaBackground.catch(function(msgErr) {
+              return fetch(url, { cache: "no-store" }).then(function(r) {
+                if (!r.ok) throw new Error("wallhaven " + r.status);
+                return r.json();
+              }).catch(function(directErr) {
+                throw new Error((msgErr && msgErr.message ? msgErr.message : String(msgErr)) + " (direct: " + (directErr && directErr.message ? directErr.message : String(directErr)) + ")");
+              });
+            });
+          }
+          return fetch(url, { cache: "no-store" }).then(function(r) {
+            if (!r.ok) throw new Error("wallhaven " + r.status);
+            return r.json();
+          });
+        }
+        function wideShots(d) {
+          return (d && Array.isArray(d.data) ? d.data : []).filter(function(x) {
+            if (!x || !x.path || !isUrl(x.path)) return false;
+            const w = +x.dimension_x, h = +x.dimension_y;
+            if (w > 0 && h > 0) return w / h >= 1.5;
+            return false;
+          }).map(function(x) {
+            return x.path;
+          });
+        }
+        function fetchWallhavenPage() {
+          const staticShots = shuffle(WALL_FALLBACK).slice(0, POOL_SIZE);
+          return wallPage(1).then(function(d) {
+            const lastPage = d && d.meta && d.meta.last_page || 1;
+            const seen = {};
+            let shots = [];
+            let tries = 0;
+            function step() {
+              if (tries >= 3 || shots.length >= POOL_SIZE) return Promise.resolve(shots);
+              tries++;
+              const page = 1 + Math.floor(Math.random() * lastPage);
+              return wallPage(page).then(wideShots).then(function(s) {
+                s.forEach(function(u) {
+                  if (!seen[photoKey(u)]) {
+                    seen[photoKey(u)] = true;
+                    shots.push(u);
+                  }
+                });
+                return step();
+              }).catch(function() {
+                return step();
+              });
+            }
+            return step().then(function(s) {
+              return s && s.length ? s : staticShots;
+            });
+          }).catch(function() {
+            return staticShots;
+          });
+        }
+        function refreshPool(advance, opts) {
+          if (refreshing) return Promise.resolve(false);
+          refreshing = true;
+          setLoading(true);
+          const different = !!(opts && opts.different);
+          return fetchWallhavenPage().then(function(all) {
+            let picked = all.slice(0, POOL_SIZE);
+            if (different) {
+              const cur = {};
+              state.list.forEach(function(u) {
+                cur[photoKey(u)] = true;
+              });
+              const fresh = all.filter(function(u) {
+                return !cur[photoKey(u)];
+              });
+              if (fresh.length >= POOL_SIZE) picked = fresh.slice(0, POOL_SIZE);
+              else picked = fresh.concat(all.filter(function(u) {
+                return cur[photoKey(u)];
+              })).slice(0, POOL_SIZE);
+            }
+            if (!picked.length) throw new Error("no wallhaven images");
+            const isNew = picked.some(function(u) {
+              return state.list.indexOf(u) === -1;
+            });
+            const prevKey = state.key;
+            state.list = picked;
+            state.lastRefresh = Date.now();
+            if (advance && (isNew || different)) {
+              state.key = picked[0] === prevKey && picked[1] ? picked[1] : picked[0];
+            }
+            pruneBlobs(state.list);
+            touch();
+            renderGrid();
+            applyBackground();
+            prefetchPool();
+            return true;
+          }).catch(function(err) {
+            lastWallError = err && err.message ? err.message : String(err);
+            try {
+              console.warn("[glisters] wallhaven refresh failed:", lastWallError);
+            } catch {
+            }
+            if (!state.list.length) {
+              state.list = shuffle(FALLBACK).slice(0, POOL_SIZE);
+              if (advance) state.key = state.list[0];
+              pruneBlobs(state.list);
+              touch();
+              renderGrid();
+              applyBackground();
+              prefetchPool();
+              return true;
+            }
+            return false;
+          }).then(function(ok) {
+            refreshing = false;
+            setLoading(false);
+            return ok;
+          });
+        }
+        function safeWallUrl(raw) {
+          if (!raw) return "";
+          try {
+            const u = new URL(raw);
+            if (u.protocol !== "https:" && u.protocol !== "http:") return "";
+            return u.href.replace(/"/g, "%22");
+          } catch {
+            return "";
+          }
+        }
+        function applyBackground() {
+          const safe = safeWallUrl(state.key);
+          if (!safe) {
+            wallEl.style.backgroundImage = "none";
+            highlightCurrent();
+            return;
+          }
+          const blob = blobUrls[safe];
+          wallEl.style.backgroundImage = 'url("' + (blob || safe) + '")';
+          if (!blob) {
+            materialize(safe).then(function(obj) {
+              if (obj && state.key === safe) {
+                wallEl.style.backgroundImage = 'url("' + obj + '")';
+              }
+            });
+          }
+          highlightCurrent();
+        }
+        function highlightCurrent() {
+          const roots = [grid, favGrid];
+          for (let g = 0; g < roots.length; g++) {
+            const r = roots[g];
+            if (!r) continue;
+            const thumbs = r.querySelectorAll(".wall-thumb");
+            for (let i = 0; i < thumbs.length; i++) {
+              thumbs[i].classList.toggle("current", thumbs[i].dataset.url === state.key);
+            }
+          }
+        }
+        function pick(key) {
+          if (key === state.key) return;
+          state.key = key;
+          applyBackground();
+          touch();
+        }
+        function nextWallpaper() {
+          if (!state.list.length) return Promise.resolve(false);
+          const i = state.key ? state.list.indexOf(state.key) : -1;
+          pick(state.list[(i + 1) % state.list.length]);
+          return Promise.resolve(true);
+        }
+        function flashSafe(msg) {
+          if (!safeStatus) return;
+          safeStatus.textContent = msg;
+          setTimeout(function() {
+            if (safeStatus) safeStatus.textContent = "";
+          }, 2500);
+        }
+        function setSafe() {
+          const s = safeWallUrl(state.key);
+          if (!s) {
+            flashSafe("no wallpaper shown to save");
+            return false;
+          }
+          state.safe = s;
+          touch();
+          highlightSafe();
+          flashSafe("safe wallpaper set — double space to apply");
+          return true;
+        }
+        function applySafe() {
+          if (!state.safe) {
+            flashSafe("no safe wallpaper yet — press space to save this one");
+            return false;
+          }
+          pick(state.safe);
+          highlightSafe();
+          flashSafe("safe wallpaper applied");
+          return true;
+        }
+        function highlightSafe() {
+          const roots = [grid, favGrid];
+          for (let g = 0; g < roots.length; g++) {
+            const r = roots[g];
+            if (!r) continue;
+            const items = r.querySelectorAll(".wall-item");
+            for (let i = 0; i < items.length; i++) {
+              const t = items[i].querySelector(".wall-thumb");
+              items[i].classList.toggle("safe", !!t && t.dataset.url === state.safe);
+            }
+          }
+        }
+        function flashDownload(msg) {
+          if (!downloadStatus) return;
+          downloadStatus.textContent = msg;
+          setTimeout(function() {
+            if (downloadStatus) downloadStatus.textContent = "";
+          }, 2500);
+        }
+        function downloadName(u) {
+          const m = /wallhaven-([a-z0-9]+)\.(jpg|png)$/i.exec(u);
+          if (m) return "wallhaven-" + m[1] + "." + m[2].toLowerCase();
+          const um = /photo-(\d+-[0-9a-f]+)/i.exec(u);
+          if (um) return "glisters-" + um[1] + ".jpg";
+          try {
+            const base = new URL(u).pathname.split("/").filter(Boolean).pop();
+            if (base) return base;
+          } catch {
+          }
+          return "glisters-wallpaper-" + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + ".jpg";
+        }
+        function triggerDownload(url, name) {
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = name;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(function() {
+            if (a.parentNode) a.parentNode.removeChild(a);
+          }, 2e3);
+        }
+        function downloadCurrent() {
+          const s = safeWallUrl(state.key);
+          if (!s) {
+            flashDownload("no wallpaper shown to download");
+            return Promise.resolve(false);
+          }
+          const name = downloadName(s);
+          if (blobUrls[s]) {
+            triggerDownload(blobUrls[s], name);
+            flashDownload("downloading current wallpaper");
+            return Promise.resolve(true);
+          }
+          return fetch(s).then(function(r) {
+            if (!r.ok) throw new Error("wallpaper download " + r.status);
+            return r.blob();
+          }).then(function(blob) {
+            const url = URL.createObjectURL(blob);
+            triggerDownload(url, name);
+            setTimeout(function() {
+              try {
+                URL.revokeObjectURL(url);
+              } catch {
+              }
+            }, 6e4);
+            flashDownload("downloading current wallpaper");
+            return true;
+          }).catch(function() {
+            try {
+              const w = window.open(s, "_blank", "noopener");
+              if (!w) location.assign(s);
+            } catch {
+              location.assign(s);
+            }
+            flashDownload("download failed — opened image in a new tab");
+            return false;
+          });
+        }
+        if (downloadBtn) downloadBtn.addEventListener("click", downloadCurrent);
+        setInterval(function() {
+          refreshPool(true);
+        }, REFRESH_MS);
+        function shortLabel(u) {
+          try {
+            const m = /wallhaven-([a-z0-9]+)\.(?:jpg|png)$/i.exec(u);
+            if (m) return m[1];
+            const p = new URL(u).pathname;
+            const um = p.match(/photo-\d+-([0-9a-f]+)/i);
+            if (um) return um[1].slice(0, 6);
+            return new URL(u).hostname.replace(/^www\./, "").slice(0, 12);
+          } catch {
+            return "image";
+          }
+        }
+        function addImage() {
+          if (!addInput || !addBtn) return;
+          const u = addInput.value.trim();
+          if (!isUrl(u)) {
+            addInput.focus();
+            return;
+          }
+          if (state.list.indexOf(u) !== -1) {
+            addInput.value = "";
+            return;
+          }
+          state.list.push(u);
+          if (state.list.length > POOL_SIZE) state.list.shift();
+          addInput.value = "";
+          touch();
+          pruneBlobs(state.list);
+          renderGrid();
+          pick(u);
+        }
+        function removeImage(u) {
+          if (isBuiltin(u)) return;
+          const i = state.list.indexOf(u);
+          if (i < 0) return;
+          state.list.splice(i, 1);
+          if (state.key === u) state.key = null;
+          touch();
+          pruneBlobs(state.list);
+          renderGrid();
+          applyBackground();
+        }
+        function renderGrid() {
+          if (!grid) return;
+          grid.innerHTML = "";
+          const none = el("button", "wall-thumb wall-none");
+          none.type = "button";
+          none.title = "no wallpaper";
+          none.dataset.url = "";
+          none.textContent = "none";
+          none.addEventListener("click", function() {
+            pick("");
+          });
+          const wrap = el("div", "wall-item");
+          wrap.appendChild(none);
+          wrap.appendChild(el("span", "wall-label", "none"));
+          grid.appendChild(wrap);
+          state.list.forEach(function(u) {
+            const w = el("div", "wall-item");
+            const b = el("button", "wall-thumb");
+            b.type = "button";
+            b.dataset.url = u;
+            b.title = u;
+            const im = document.createElement("img");
+            im.src = thumbUrl(u);
+            im.alt = "";
+            im.loading = "lazy";
+            im.decoding = "async";
+            im.referrerPolicy = "no-referrer";
+            im.addEventListener("error", function() {
+              b.classList.add("failed");
+            });
+            b.appendChild(im);
+            b.addEventListener("click", function() {
+              pick(u);
+            });
+            w.appendChild(b);
+            const label = el("span", "wall-label", shortLabel(u));
+            w.appendChild(label);
+            if (!isBuiltin(u)) {
+              const rm = el("span", "wall-remove");
+              rm.setAttribute("role", "button");
+              rm.setAttribute("aria-label", "remove wallpaper");
+              rm.textContent = "×";
+              rm.addEventListener("click", function(e) {
+                e.stopPropagation();
+                removeImage(u);
+              });
+              w.appendChild(rm);
+              w.classList.add("has-remove");
+            }
+            grid.appendChild(w);
+          });
+          highlightCurrent();
+          highlightSafe();
+        }
+        function flashFav(msg) {
+          if (!favStatus) return;
+          favStatus.textContent = msg;
+          setTimeout(function() {
+            if (favStatus) favStatus.textContent = "";
+          }, 2500);
+        }
+        function addFav(u) {
+          if (!u || !isUrl(u)) {
+            flashFav("nothing to favourite");
+            return false;
+          }
+          if (state.favs.indexOf(u) !== -1) {
+            flashFav("already a favourite");
+            return false;
+          }
+          state.favs.push(u);
+          if (state.favs.length > FAV_MAX) state.favs.shift();
+          touch();
+          renderFavs();
+          flashFav("favourited");
+          return true;
+        }
+        function removeFav(u) {
+          const i = state.favs.indexOf(u);
+          if (i < 0) return;
+          state.favs.splice(i, 1);
+          touch();
+          renderFavs();
+          flashFav("removed favourite");
+        }
+        function favPool() {
+          if (!state.favs.length) {
+            flashFav("no favourites yet — press f to save this one");
+            return false;
+          }
+          const favs = state.favs.slice(0, POOL_SIZE);
+          state.list = favs;
+          state.lastRefresh = Date.now();
+          if (!state.key || favs.indexOf(state.key) === -1) state.key = favs[0];
+          pruneBlobs(state.list);
+          touch();
+          renderGrid();
+          applyBackground();
+          prefetchPool();
+          flashFav("favourites now the pool — w to cycle");
+          return true;
+        }
+        function renderFavs() {
+          if (!favGrid) return;
+          favGrid.innerHTML = "";
+          if (!state.favs.length) {
+            const hint = el("button", "wall-thumb fav-empty");
+            hint.type = "button";
+            hint.title = "press f with a wallpaper to save it here";
+            hint.textContent = "press f";
+            hint.addEventListener("click", function() {
+              addFav(state.key);
+            });
+            const wrap = el("div", "wall-item");
+            wrap.appendChild(hint);
+            wrap.appendChild(el("span", "wall-label", "favourites"));
+            favGrid.appendChild(wrap);
+          }
+          state.favs.forEach(function(u) {
+            const w = el("div", "wall-item has-remove");
+            const b = el("button", "wall-thumb");
+            b.type = "button";
+            b.dataset.url = u;
+            b.title = u;
+            const im = document.createElement("img");
+            im.src = thumbUrl(u);
+            im.alt = "";
+            im.loading = "lazy";
+            im.decoding = "async";
+            im.referrerPolicy = "no-referrer";
+            im.addEventListener("error", function() {
+              b.classList.add("failed");
+            });
+            b.appendChild(im);
+            b.addEventListener("click", function() {
+              pick(u);
+            });
+            w.appendChild(b);
+            w.appendChild(el("span", "wall-label", shortLabel(u)));
+            const rm = el("span", "wall-remove");
+            rm.setAttribute("role", "button");
+            rm.setAttribute("aria-label", "remove favourite wallpaper");
+            rm.textContent = "×";
+            rm.addEventListener("click", function(e) {
+              e.stopPropagation();
+              removeFav(u);
+            });
+            w.appendChild(rm);
+            favGrid.appendChild(w);
+          });
+          highlightCurrent();
+          highlightSafe();
+        }
+        if (favAddBtn) favAddBtn.addEventListener("click", function() {
+          addFav(state.key);
+        });
+        if (safeSetBtn) safeSetBtn.addEventListener("click", setSafe);
+        if (safeApplyBtn) safeApplyBtn.addEventListener("click", applySafe);
+        if (addBtn) addBtn.addEventListener("click", addImage);
+        if (addInput) addInput.addEventListener("keydown", function(e) {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            addImage();
+          }
+        });
+        let purityBtns = null;
+        let categoryBtns = null;
+        let keyInput = null;
+        function renderFilterButtons() {
+          if (purityBtns && categoryBtns) {
+            purityBtns.forEach(function(b) {
+              if (b.dataset.wallPurity === "111") {
+                b.disabled = !state.apikey;
+                b.title = state.apikey ? "" : "requires a wallhaven API key";
+              }
+              b.classList.toggle("selected", b.dataset.wallPurity === state.purity);
+            });
+            categoryBtns.forEach(function(b) {
+              b.classList.toggle("selected", b.dataset.wallCategory === state.category);
+            });
+          }
+          if (keyInput && document.activeElement !== keyInput && keyInput.value !== state.apikey) {
+            keyInput.value = state.apikey || "";
+          }
+        }
+        function setFilter(type, value) {
+          const opts = type === "purity" ? PURE_OPTS : CAT_OPTS;
+          if (opts.indexOf(value) === -1) return Promise.resolve(false);
+          if (type === "purity" && value === "111" && !state.apikey) return Promise.resolve(false);
+          const key = type === "purity" ? "purity" : "category";
+          if (state[key] === value) return Promise.resolve(true);
+          state[key] = value;
+          touch();
+          renderFilterButtons();
+          return refreshPool(true, { different: true });
+        }
+        function setKey(v) {
+          const key = cleanKey(v);
+          if (key === state.apikey) return Promise.resolve(true);
+          state.apikey = key;
+          touch();
+          if (state.purity === "111") {
+            if (!key) {
+              state.purity = "110";
+              touch();
+            }
+            renderFilterButtons();
+            return refreshPool(true, { different: true });
+          }
+          renderFilterButtons();
+          return Promise.resolve(true);
+        }
+        purityBtns = Array.prototype.slice.call(document.querySelectorAll("[data-wall-purity]"));
+        categoryBtns = Array.prototype.slice.call(document.querySelectorAll("[data-wall-category]"));
+        purityBtns.forEach(function(b) {
+          b.addEventListener("click", function() {
+            setFilter("purity", b.dataset.wallPurity ?? "");
+          });
+        });
+        categoryBtns.forEach(function(b) {
+          b.addEventListener("click", function() {
+            setFilter("category", b.dataset.wallCategory ?? "");
+          });
+        });
+        keyInput = document.getElementById("wallKey");
+        if (keyInput) {
+          let commitKey = function() {
+            const key = cleanKey(keyInput.value);
+            keyInput.value = key;
+            setKey(key);
+          };
+          keyInput.addEventListener("change", commitKey);
+          keyInput.addEventListener("keydown", function(e) {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commitKey();
+            }
+          });
+        }
+        function reload() {
+          if (refreshing) return Promise.resolve(false);
+          if (!reloadBtn) return refreshPool(true, { different: true });
+          reloadBtn.disabled = true;
+          return refreshPool(true, { different: true }).then(function(ok) {
+            if (reloadStatus) reloadStatus.textContent = ok ? "10 new wallpapers" : "kept pool";
+            setTimeout(function() {
+              if (reloadStatus) reloadStatus.textContent = "";
+            }, 3e3);
+            reloadBtn.disabled = false;
+            return ok;
+          }).catch(function() {
+            if (reloadStatus) reloadStatus.textContent = "kept pool";
+            setTimeout(function() {
+              if (reloadStatus) reloadStatus.textContent = "";
+            }, 3e3);
+            reloadBtn.disabled = false;
+            return false;
+          });
+        }
+        if (reloadBtn) reloadBtn.addEventListener("click", reload);
+        function isVisible(sel) {
+          const n = document.querySelector(sel);
+          return !!n && !n.hidden && n.getAttribute("aria-hidden") !== "true" && getComputedStyle(n).display !== "none";
+        }
+        const SPACE_WAIT_MS = 350;
+        let spaceTimer = null;
+        function spaceTap() {
+          if (spaceTimer) {
+            clearTimeout(spaceTimer);
+            spaceTimer = null;
+            applySafe();
+          } else {
+            spaceTimer = setTimeout(function() {
+              spaceTimer = null;
+              setSafe();
+            }, SPACE_WAIT_MS);
+          }
+        }
+        document.addEventListener("keydown", function(e) {
+          if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
+          if (e.repeat) return;
+          const t = e.target;
+          if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+          if (isVisible("#modal") || isVisible("#bar")) return;
+          const drawer = document.querySelector("#drawer");
+          const bk = document.querySelector("#bk");
+          const drawerOpen = !!(drawer && drawer.classList.contains("open"));
+          if (bk && bk.classList.contains("open")) return;
+          if (e.key === "D" || e.key === "d" && drawerOpen) {
+            e.preventDefault();
+            downloadCurrent();
+            return;
+          }
+          if (drawerOpen) return;
+          if (e.key !== "w" && e.key !== "W" && e.key !== "r" && e.key !== "R" && e.key !== "f" && e.key !== "F" && e.key !== " ") return;
+          e.preventDefault();
+          if (e.key === "r" || e.key === "R") reload();
+          else if (e.key === "F") favPool();
+          else if (e.key === "f") addFav(state.key);
+          else if (e.key === " ") spaceTap();
+          else nextWallpaper();
+        });
+        let saved = null;
+        try {
+          saved = JSON.parse(localStorage.getItem(LS_KEY) || "null");
+        } catch {
+        }
+        if (saved) setData(saved);
+        renderGrid();
+        renderFavs();
+        renderFilterButtons();
+        applyBackground();
+        highlightSafe();
+        pruneBlobs(state.list);
+        prefetchPool();
+        function reconcileFavs() {
+          function add(s) {
+            keepFavs(s.favs || []);
+          }
+          let lsWalls = null;
+          let lsApp = null;
+          try {
+            lsWalls = JSON.parse(localStorage.getItem(LS_KEY) || "null");
+          } catch {
+          }
+          try {
+            lsApp = JSON.parse(localStorage.getItem("glisters") || "null");
+          } catch {
+          }
+          if (lsWalls) add(lsWalls);
+          if (lsApp && lsApp.walls) add(lsApp.walls);
+          if (window.chrome && chrome.storage && chrome.storage.local) {
+            try {
+              chrome.storage.local.get([LS_KEY, "glisters"], function(o) {
+                if (!o) return;
+                if (o[LS_KEY]) add(o[LS_KEY]);
+                if (o["glisters"] && o["glisters"].walls) {
+                  add(o["glisters"].walls);
+                }
+                if (o[LS_KEY] && !JSON.parse(localStorage.getItem(LS_KEY) || "null")) adopt(o[LS_KEY]);
+              });
+            } catch {
+            }
+          }
+        }
+        reconcileFavs();
+        setTimeout(function() {
+          if (Date.now() - state.lastRefresh >= REFRESH_MS) refreshPool(true);
+        }, 1500);
+        window.WALLS = {
+          bind: function(cb) {
+            appCommit = cb;
+          },
+          forDoc: function() {
+            return dataDoc();
+          },
+          restore: function(d) {
+            if (!d || typeof d !== "object") return;
+            adopt(d);
+          },
+          next: function() {
+            return nextWallpaper();
+          },
+          refresh: function() {
+            return refreshPool(true);
+          },
+          reload: function() {
+            return reload();
+          },
+          filter: function(type, value) {
+            return setFilter(type, value);
+          },
+          key: function(v) {
+            return setKey(v);
+          },
+          fav: function() {
+            return addFav(state.key);
+          },
+          favPool: function() {
+            return favPool();
+          },
+          setSafe: function() {
+            return setSafe();
+          },
+          applySafe: function() {
+            return applySafe();
+          },
+          download: function() {
+            return downloadCurrent();
+          }
+        };
+      })();
+    }
+  });
+  require_walls();
+})();
