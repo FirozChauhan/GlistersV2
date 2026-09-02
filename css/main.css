@@ -250,6 +250,46 @@ kbd {
 }
 .grid.dragging-active .tile:hover .icon { transform: none; }
 
+/* glitter — a fast burst of tiny white sparkles that pops off the icon's
+   top-right on hover / keyboard focus. Pure decoration: pointer-events none,
+   sits behind the right-click buttons. Fast (0.4s) so it reads as a quick
+   glint, not a shimmer. */
+.tile .icon::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  width: 2.5px;
+  height: 2.5px;
+  top: 9%;
+  right: 11%;
+  border-radius: 50%;
+  background: #fff;
+  /* the element + these box-shadow copies = a small cluster of glitter specks.
+     box-shadows scale with the element's transform, so the whole cluster pops
+     outward and fades together. */
+  box-shadow:
+    -6px -5px 0 0 #fff,
+    5px -8px 0 0 #fff,
+    -4px 6px 0 0 #fff,
+    7px 4px 0 0 #fff,
+    -7px 1px 0 0 rgba(255, 255, 255, 0.85);
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.8));
+  opacity: 0;
+  transform: scale(0.15);
+}
+.tile:hover .icon::after,
+.tile.focused .icon::after,
+.tile:focus-visible .icon::after {
+  animation: glitter-pop 0.4s ease-out;
+}
+@keyframes glitter-pop {
+  0%   { opacity: 0;    transform: scale(0.15); }
+  18%  { opacity: 1;    transform: scale(1.35); }
+  55%  { opacity: 0.7;  transform: scale(0.8); }
+  100% { opacity: 0;    transform: scale(0.3); }
+}
+
 .tile .icon * { grid-area: 1 / 1; }
 
 /* right-click actions — two circular buttons natively overlaid on the icon
