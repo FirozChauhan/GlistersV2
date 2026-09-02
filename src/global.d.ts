@@ -52,7 +52,12 @@ interface CommitOptions {
 /* ─── IconCandidate ─── */
 interface IconCandidate {
   src: string;
-  preferred: boolean;
+  /* Higher rank wins. Caps: 100 user icon, 95 official, 88 apple-touch,
+     84 favicon-32, 80 favicon.ico, 72 duckduckgo, 68 google s2. */
+  rank: number;
+  /* Which service produced this src — used to reject known "fake" images
+     (Google's 16x16 generic globe, DuckDuckGo's placeholder). */
+  service?: 'site' | 's2' | 'ddg';
   chip?: boolean;
 }
 

@@ -397,18 +397,22 @@
         function iconCandidates(site, deep = false) {
           const h = hostOf(site.url);
           const cands = [];
-          if (site.icon) cands.push({ src: site.icon, preferred: true });
+          if (site.icon) cands.push({ src: site.icon, rank: 100, service: "site" });
           if (!h) return cands;
           const first = officialIcon(site.url);
-          if (first) cands.push({ src: first, preferred: true });
+          if (first) cands.push({ src: first, rank: 95, service: "site" });
           const s2url = function(d) {
             return "https://www.google.com/s2/favicons?domain=" + encodeURIComponent(d) + "&sz=128";
           };
-          cands.push({ src: s2url(h), preferred: true });
-          cands.push({ src: "https://" + h + "/apple-touch-icon.png", preferred: false });
-          cands.push({ src: "https://" + h + "/favicon.ico", preferred: false });
-          if (deep) {
-            cands.push({ src: "https://" + h + "/favicon-32x32.png", preferred: false });
+          if (!deep) {
+            cands.push({ src: "https://" + h + "/favicon.ico", rank: 80, service: "site" });
+            cands.push({ src: "https://" + h + "/apple-touch-icon.png", rank: 88, service: "site" });
+            cands.push({ src: "https://icons.duckduckgo.com/ip3/" + encodeURIComponent(h) + ".ico", rank: 72, service: "ddg" });
+            cands.push({ src: s2url(h), rank: 68, service: "s2" });
+          } else {
+            cands.push({ src: "https://" + h + "/favicon.ico", rank: 80, service: "site" });
+            cands.push({ src: "https://" + h + "/favicon-32x32.png", rank: 84, service: "site" });
+            cands.push({ src: "https://" + h + "/apple-touch-icon.png", rank: 88, service: "site" });
             const variants = [h];
             const parts = h.split(".");
             while (parts.length > 2) {
@@ -416,9 +420,10 @@
               variants.push(parts.join("."));
             }
             for (let i = 1; i < variants.length; i++) {
-              cands.push({ src: s2url(variants[i]), preferred: false, chip: true });
+              cands.push({ src: s2url(variants[i]), rank: 62, service: "s2", chip: true });
             }
-            cands.push({ src: "https://icons.duckduckgo.com/ip3/" + encodeURIComponent(h) + ".ico", preferred: false });
+            cands.push({ src: "https://icons.duckduckgo.com/ip3/" + encodeURIComponent(h) + ".ico", rank: 72, service: "ddg" });
+            cands.push({ src: s2url(h), rank: 68, service: "s2" });
           }
           return cands;
         }
@@ -476,7 +481,7 @@
           if (n > 5) return;
           setTimeout(function() {
             retryIcon(key);
-          }, n * 5e3);
+          }, n * 2500);
         }
         function retryIcon(key) {
           if (faviconCache[key] !== false || mode !== "none" || dragUi) return;
@@ -509,29 +514,71 @@
           }
           if (any) renderGrid();
         }
+        function serviceOf(src) {
+          if (/google\.com\/s2\/favicons|gstatic\.com\/faviconV2/i.test(src)) return "s2";
+          if (/icons\.duckduckgo\.com\/ip3/i.test(src)) return "ddg";
+          return "site";
+        }
         function loadIcon(ic, letter, cands, key, onFail) {
           let bestImg = null;
+          let bestSrc = "";
+          let bestRank = -1;
           let bestW = 0;
           let settled = false;
-          const guard = cands.length ? setTimeout(finalize, 6e3) : 0;
-          let hasPreferred = false;
-          for (let p = 0; p < cands.length; p++) {
-            if (cands[p].preferred) {
-              hasPreferred = true;
-              break;
+          let settleT = null;
+          const guard = setTimeout(function() {
+            finalize();
+          }, 8e3);
+          let pending = cands.length;
+          if (pending === 0) {
+            clearTimeout(guard);
+            if (key) {
+              iconLoading[key] = false;
+              faviconCache[key] = false;
+              scheduleIconRetry(key);
+            }
+            if (onFail) onFail();
+            return;
+          }
+          for (let i = 0; i < cands.length; i++) trySrc(cands[i]);
+          function showBest() {
+            if (!bestImg || settled) return;
+            const kids = Array.prototype.slice.call(ic.children);
+            for (let k = 0; k < kids.length; k++) {
+              const kid = kids[k];
+              if (kid.tagName === "IMG") {
+                if (kid === bestImg) {
+                  kid.style.opacity = "";
+                  kid.classList.add("loaded");
+                } else {
+                  kid.style.opacity = "0";
+                  kid.classList.remove("loaded");
+                }
+              }
+            }
+            if (bestImg.parentNode !== ic) ic.appendChild(bestImg);
+            if (letter && !letter.classList.contains("out")) {
+              letter.classList.add("out");
+              setTimeout(function() {
+                letter.style.display = "none";
+              }, 230);
             }
           }
-          for (let i = 0; i < cands.length; i++) trySrc(cands[i].src, cands[i].preferred, !!cands[i].chip);
           function finalize() {
             if (settled) return;
             settled = true;
-            if (guard) clearTimeout(guard);
+            clearTimeout(guard);
+            if (settleT) clearTimeout(settleT);
             if (key) iconLoading[key] = false;
             if (bestImg) {
               const kids = Array.prototype.slice.call(ic.children);
               for (let k = 0; k < kids.length; k++) {
-                if (kids[k].tagName === "IMG" && kids[k] !== bestImg) ic.removeChild(kids[k]);
+                if (kids[k].tagName === "IMG" && kids[k] !== bestImg) {
+                  kids[k].remove();
+                }
               }
+              if (bestImg.parentNode !== ic) ic.appendChild(bestImg);
+              bestImg.style.opacity = "";
               bestImg.classList.add("loaded");
               if (letter) {
                 letter.classList.add("out");
@@ -550,7 +597,8 @@
               }
               if (key) {
                 faviconCache[key] = bestImg;
-                if (bestImg.src) persistIcon(key, bestImg.src);
+                if (bestSrc) persistIcon(key, bestSrc);
+                else if (bestImg.src) persistIcon(key, bestImg.src);
               }
             } else if (key) {
               faviconCache[key] = false;
@@ -558,16 +606,22 @@
               if (onFail) onFail();
             }
           }
-          function allDone() {
-            const kids = ic.children;
-            for (let k = 0; k < kids.length; k++) {
-              if (kids[k].tagName === "IMG" && !kids[k]._done) return;
-            }
-            finalize();
+          function isFake(c, w, h) {
+            if (w < 16 || h < 16) return true;
+            if (c.service === "s2" && w <= 16 && h <= 16) return true;
+            return false;
           }
-          function trySrc(src, preferred, chip) {
+          function maybeSettle() {
+            if (settled || !bestImg) return;
+            if (bestRank >= 85 && bestW >= 48) {
+              finalize();
+              return;
+            }
+            if (settleT) clearTimeout(settleT);
+            settleT = setTimeout(finalize, 380);
+          }
+          function trySrc(c) {
             const img = document.createElement("img");
-            img.src = src;
             img.alt = "";
             img.draggable = false;
             img.decoding = "async";
@@ -576,44 +630,103 @@
             const idle = setTimeout(function() {
               if (done || settled) return;
               done = true;
-              img._done = true;
               if (img.parentNode) img.remove();
-              allDone();
-            }, 4e3);
-            img.addEventListener("load", function() {
+              allPendingDone();
+            }, 7500);
+            function resolve(ok, w, h) {
               if (done || settled) return;
               done = true;
-              img._done = true;
               clearTimeout(idle);
-              const w = img.naturalWidth, h = img.naturalHeight;
-              if (w < 16 || h < 16 || chip && w <= 16) {
+              if (!ok || isFake(c, w, h)) {
                 if (img.parentNode) img.remove();
-                allDone();
+                allPendingDone();
                 return;
               }
-              if (preferred) {
+              const rank = c.rank;
+              const effW = Math.min(w, 128);
+              const effBW = Math.min(bestW, 128);
+              const improved = !bestImg || effW > effBW || effW === effBW && rank > bestRank;
+              if (improved) {
+                bestRank = rank;
                 bestW = w;
                 bestImg = img;
-                finalize();
-                return;
+                bestSrc = c.src;
+                showBest();
+                maybeSettle();
               }
-              if (w > bestW) {
-                bestW = w;
-                bestImg = img;
-              }
-              if (w >= 128 && !hasPreferred) finalize();
-              else allDone();
+              allPendingDone();
+            }
+            img.addEventListener("load", function() {
+              resolve(true, img.naturalWidth, img.naturalHeight);
             });
             img.addEventListener("error", function() {
-              if (done || settled) return;
-              done = true;
-              img._done = true;
-              clearTimeout(idle);
-              if (img.parentNode) img.remove();
-              allDone();
+              resolve(false, 0, 0);
             });
             ic.appendChild(img);
+            img.style.opacity = "0";
+            img.src = c.src;
           }
+          function allPendingDone() {
+            pending--;
+            if (pending <= 0) finalize();
+          }
+        }
+        let prefetchTimer = null;
+        let prefetchQueue = [];
+        let prefetchPos = 0;
+        function prefetchStep() {
+          if (prefetchPos >= prefetchQueue.length) {
+            prefetchTimer = null;
+            return;
+          }
+          const host = document.getElementById("__iconPrefetch");
+          if (!host) {
+            prefetchTimer = null;
+            return;
+          }
+          let batch = 4;
+          while (batch > 0 && prefetchPos < prefetchQueue.length) {
+            const site = state.sites[prefetchQueue[prefetchPos]];
+            prefetchPos++;
+            batch--;
+            if (!site || !site.url) continue;
+            const key = site.url;
+            if (faviconCache[key] !== void 0 || iconLoading[key]) continue;
+            iconLoading[key] = true;
+            const ic = el("span", "icon");
+            const letter = el("span", "letter", initials(site.name));
+            ic.appendChild(letter);
+            host.appendChild(ic);
+            const cands = iconCandidates(site, iconDeep);
+            if (cands.length) loadIcon(ic, letter, cands, key);
+            else {
+              iconLoading[key] = false;
+              faviconCache[key] = false;
+            }
+          }
+          if (prefetchPos < prefetchQueue.length) prefetchTimer = setTimeout(prefetchStep, 300);
+          else prefetchTimer = null;
+        }
+        function prefetchRemaining() {
+          if (state.sites.length === 0) return;
+          let host = document.getElementById("__iconPrefetch");
+          if (!host) {
+            host = el("div", "");
+            host.id = "__iconPrefetch";
+            host.setAttribute("style", "position:absolute;left:-9999px;top:-9999px;width:0;height:0;overflow:hidden;pointer-events:none;");
+            document.body.appendChild(host);
+          }
+          prefetchQueue = [];
+          for (let i = 0; i < state.sites.length; i++) {
+            const site = state.sites[i];
+            if (!site || !site.url) continue;
+            const key = site.url;
+            if (faviconCache[key] !== void 0 || iconLoading[key]) continue;
+            prefetchQueue.push(i);
+          }
+          prefetchPos = 0;
+          if (prefetchTimer) clearTimeout(prefetchTimer);
+          if (prefetchQueue.length) prefetchTimer = setTimeout(prefetchStep, 200);
         }
         function tileEl(site, i) {
           const b = el("button", "tile");
@@ -643,7 +756,7 @@
           } else if (cached === void 0 && !iconLoading[key]) {
             iconLoading[key] = true;
             if (persistedIcons[key] && !site.icon) {
-              loadIcon(ic, letter, [{ src: persistedIcons[key], preferred: true }], key, function() {
+              loadIcon(ic, letter, [{ src: persistedIcons[key], rank: 100, service: serviceOf(persistedIcons[key]) }], key, function() {
                 delete persistedIcons[key];
                 delete faviconCache[key];
                 for (let i2 = pageStart(); i2 <= pageEnd(); i2++) {
@@ -751,6 +864,9 @@
         }
         function animatePage(dir) {
           if (!grid || !scrollArea) return;
+          const wrap = grid.parentElement;
+          if (!wrap) return;
+          const wp = wrap;
           grid.classList.remove("anim-next", "anim-prev", "anim-reorder");
           if (pageGhost) {
             pageGhost.remove();
@@ -760,18 +876,20 @@
           const ghost = grid.cloneNode(true);
           ghost.classList.remove("anim-next", "anim-prev", "anim-reorder", "dragging-active");
           ghost.classList.add("page-snapshot", dir > 0 ? "page-out-next" : "page-out-prev");
+          const wr = wp.getBoundingClientRect();
           const r = grid.getBoundingClientRect();
-          const sr = scrollArea.getBoundingClientRect();
           ghost.style.position = "absolute";
-          ghost.style.left = r.left - sr.left + scrollArea.scrollLeft + "px";
-          ghost.style.top = r.top - sr.top + scrollArea.scrollTop + "px";
+          ghost.style.left = r.left - wr.left + "px";
+          ghost.style.top = r.top - wr.top + "px";
           ghost.style.width = r.width + "px";
           ghost.style.margin = "0";
-          scrollArea.appendChild(ghost);
+          wp.appendChild(ghost);
+          wp.classList.add("page-flipping");
           pageGhost = ghost;
           function drop() {
             if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
             if (pageGhost === ghost) pageGhost = null;
+            wp.classList.remove("page-flipping");
           }
           ghost.addEventListener("animationend", drop, { once: true });
           setTimeout(drop, 600);
@@ -1391,7 +1509,7 @@
           (metaIcons[url] || []).forEach(function(src) {
             if (!src || seen[src]) return;
             seen[src] = true;
-            cands.push({ src, preferred: false });
+            cands.push({ src, rank: 76, service: "site" });
           });
           let shown = 0;
           for (let i = 0; i < cands.length && shown < 8; i++) {
@@ -2061,6 +2179,7 @@
           setInterval(function() {
             retryAllFailed();
           }, 12e4);
+          setTimeout(prefetchRemaining, 2e3);
         }
         document.addEventListener("DOMContentLoaded", init);
       })();

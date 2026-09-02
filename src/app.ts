@@ -396,30 +396,35 @@ function officialIcon(url: string): string | null {
 function iconCandidates(site: Site, deep = false): IconCandidate[] {
   const h = hostOf(site.url);
   const cands: IconCandidate[] = [];
-  if (site.icon) cands.push({ src: site.icon, preferred: true });
+  if (site.icon) cands.push({ src: site.icon, rank: 100, service: 'site' });
   if (!h) return cands;
   const first = officialIcon(site.url);
-  if (first) cands.push({ src: first, preferred: true });
-  // Fast, uniform primary source via Google's favicon CDN (loads in <300ms vs
-  // the site's own apple-touch/favicon which are often slow or 404). Marked
-  // preferred so the tile settles quickly and uniformly instead of a janky
-  // staggered letter→icon pop-in. Only this lean set is requested up front so
-  // the grid doesn't fire ~150 concurrent favicon requests (which queue behind
-  // each other and contend with the wallpaper); the deeper site-specific
-  // sources are tried on retry when s2 has no match.
+  if (first) cands.push({ src: first, rank: 95, service: 'site' });
+
+  // Fast, uniform source via Google's favicon CDN. Marked LOW rank so the
+  // site's own (higher-res, real) favicons win when they arrive, but it still
+  // gives a quick real icon for most sites. Google returns a 404 generic globe
+  // for domains it has no record of — loadIcon's isFake() rejects it by size, so
+  // we fall through to the site's own favicons / DuckDuckGo.
   const s2url = function (d: string): string {
     return 'https://www.google.com/s2/favicons?domain=' + encodeURIComponent(d) + '&sz=128';
   };
-  cands.push({ src: s2url(h), preferred: true });
-  // The site's own favicons are included as non-preferred fallbacks even on the
-  // first pass, so sites Google's s2 CDN can't resolve (returns a tiny generic
-  // globe that gets rejected) still get a real icon immediately instead of
-  // waiting for the delayed deep retry. s2 stays preferred so fast-loading tiles
-  // settle uniformly and these idle candidates are discarded once settled.
-  cands.push({ src: 'https://' + h + '/apple-touch-icon.png', preferred: false });
-  cands.push({ src: 'https://' + h + '/favicon.ico', preferred: false });
-  if (deep) {
-    cands.push({ src: 'https://' + h + '/favicon-32x32.png', preferred: false });
+
+  if (!deep) {
+    // Lean fast pass — ~4 light requests per site so it still feels instant but
+    // stays reliable: the site's own favicon.ico + high-res apple-touch, then
+    // DuckDuckGo's resolver (for sites Google can't find), then Google's fast
+    // CDN. favicon-32 / s2 domain-variants are only tried on the deep retry.
+    cands.push({ src: 'https://' + h + '/favicon.ico', rank: 80, service: 'site' });
+    cands.push({ src: 'https://' + h + '/apple-touch-icon.png', rank: 88, service: 'site' });
+    cands.push({ src: 'https://icons.duckduckgo.com/ip3/' + encodeURIComponent(h) + '.ico', rank: 72, service: 'ddg' });
+    cands.push({ src: s2url(h), rank: 68, service: 's2' });
+  } else {
+    // Deeper retry pass: add the domain-variant lookups (e.g. imagekit.io via
+    // s2 for the bare/apex domain), and re-try the site's own favicons.
+    cands.push({ src: 'https://' + h + '/favicon.ico', rank: 80, service: 'site' });
+    cands.push({ src: 'https://' + h + '/favicon-32x32.png', rank: 84, service: 'site' });
+    cands.push({ src: 'https://' + h + '/apple-touch-icon.png', rank: 88, service: 'site' });
     const variants = [h];
     const parts = h.split('.');
     while (parts.length > 2) {
@@ -427,9 +432,10 @@ function iconCandidates(site: Site, deep = false): IconCandidate[] {
       variants.push(parts.join('.'));
     }
     for (let i = 1; i < variants.length; i++) {
-      cands.push({ src: s2url(variants[i]), preferred: false, chip: true });
+      cands.push({ src: s2url(variants[i]), rank: 62, service: 's2', chip: true });
     }
-    cands.push({ src: 'https://icons.duckduckgo.com/ip3/' + encodeURIComponent(h) + '.ico', preferred: false });
+    cands.push({ src: 'https://icons.duckduckgo.com/ip3/' + encodeURIComponent(h) + '.ico', rank: 72, service: 'ddg' });
+    cands.push({ src: s2url(h), rank: 68, service: 's2' });
   }
   return cands;
 }
@@ -488,7 +494,7 @@ function scheduleIconRetry(key: string): void {
   const n = (iconRetries[key] || 0) + 1;
   iconRetries[key] = n;
   if (n > 5) return;
-  setTimeout(function () { retryIcon(key); }, n * 5000);
+  setTimeout(function () { retryIcon(key); }, n * 2500);
 }
 
 function retryIcon(key: string): void {
@@ -522,26 +528,63 @@ function retryAllFailed(): void {
   if (any) renderGrid();
 }
 
+function serviceOf(src: string): 'site' | 's2' | 'ddg' {
+  if (/google\.com\/s2\/favicons|gstatic\.com\/faviconV2/i.test(src)) return 's2';
+  if (/icons\.duckduckgo\.com\/ip3/i.test(src)) return 'ddg';
+  return 'site';
+}
+
 function loadIcon(ic: HTMLElement, letter: HTMLElement | null, cands: IconCandidate[], key: string, onFail?: () => void): void {
   let bestImg: HTMLImageElement | null = null;
+  let bestSrc = '';
+  let bestRank = -1;
   let bestW = 0;
   let settled = false;
-  const guard = cands.length ? setTimeout(finalize, 6000) : 0;
-  let hasPreferred = false;
-  for (let p = 0; p < cands.length; p++) { if (cands[p].preferred) { hasPreferred = true; break; } }
+  let settleT: ReturnType<typeof setTimeout> | null = null;
+  const guard = setTimeout(function () { finalize(); }, 8000);
+  let pending = cands.length;
+  if (pending === 0) {
+    clearTimeout(guard);
+    if (key) { iconLoading[key] = false; faviconCache[key] = false; scheduleIconRetry(key); }
+    if (onFail) onFail();
+    return;
+  }
 
-  for (let i = 0; i < cands.length; i++) trySrc(cands[i].src, cands[i].preferred, !!cands[i].chip);
+  for (let i = 0; i < cands.length; i++) trySrc(cands[i]);
+
+  function showBest(): void {
+    if (!bestImg || settled) return;
+    // Reveal the winning image immediately (live preview) and keep the rest
+    // hidden so slower-but-better candidates can still upgrade it. Hide the
+    // letter the moment we have a real icon — no waiting for the settle window.
+    const kids = Array.prototype.slice.call(ic.children);
+    for (let k = 0; k < kids.length; k++) {
+      const kid = kids[k] as HTMLElement;
+      if (kid.tagName === 'IMG') {
+        if (kid === bestImg) { kid.style.opacity = ''; kid.classList.add('loaded'); }
+        else { kid.style.opacity = '0'; kid.classList.remove('loaded'); }
+      }
+    }
+    if (bestImg.parentNode !== ic) ic.appendChild(bestImg);
+    if (letter && !letter.classList.contains('out')) {
+      letter.classList.add('out');
+      setTimeout(function () { letter.style.display = 'none'; }, 230);
+    }
+  }
 
   function finalize(): void {
     if (settled) return;
     settled = true;
-    if (guard) clearTimeout(guard);
+    clearTimeout(guard);
+    if (settleT) clearTimeout(settleT);
     if (key) iconLoading[key] = false;
     if (bestImg) {
       const kids = Array.prototype.slice.call(ic.children);
       for (let k = 0; k < kids.length; k++) {
-        if (kids[k].tagName === 'IMG' && kids[k] !== bestImg) ic.removeChild(kids[k]);
+        if (kids[k].tagName === 'IMG' && kids[k] !== bestImg) { (kids[k] as HTMLImageElement).remove(); }
       }
+      if (bestImg.parentNode !== ic) ic.appendChild(bestImg);
+      bestImg.style.opacity = '';
       bestImg.classList.add('loaded');
       if (letter) {
         letter.classList.add('out');
@@ -558,7 +601,8 @@ function loadIcon(ic: HTMLElement, letter: HTMLElement | null, cands: IconCandid
       }
       if (key) {
         faviconCache[key] = bestImg;
-        if (bestImg.src) persistIcon(key, bestImg.src);
+        if (bestSrc) persistIcon(key, bestSrc);
+        else if (bestImg.src) persistIcon(key, bestImg.src);
       }
     } else if (key) {
       faviconCache[key] = false;
@@ -567,17 +611,27 @@ function loadIcon(ic: HTMLElement, letter: HTMLElement | null, cands: IconCandid
     }
   }
 
-  function allDone(): void {
-    const kids = ic.children;
-    for (let k = 0; k < kids.length; k++) {
-      if (kids[k].tagName === 'IMG' && !(kids[k] as HTMLImageElement & { _done?: boolean })._done) return;
-    }
-    finalize();
+  // Nothing under 16px is worth showing, and Google's CDN returns a 16x16
+  // generic globe for domains it doesn't know — reject it so the site's own
+  // higher-res favicon (or DuckDuckGo) gets the slot instead of a wrong globe.
+  function isFake(c: IconCandidate, w: number, h: number): boolean {
+    if (w < 16 || h < 16) return true;
+    if (c.service === 's2' && w <= 16 && h <= 16) return true;
+    return false;
   }
 
-  function trySrc(src: string, preferred: boolean, chip: boolean): void {
+  function maybeSettle(): void {
+    if (settled || !bestImg) return;
+    // A ground-truth, sharp site icon (apple-touch / official >= 48px) is final.
+    if (bestRank >= 85 && bestW >= 48) { finalize(); return; }
+    // Short window so the icon locks in fast while still letting a better source
+    // that arrives a moment later win. Re-armed on each improvement.
+    if (settleT) clearTimeout(settleT);
+    settleT = setTimeout(finalize, 380);
+  }
+
+  function trySrc(c: IconCandidate): void {
     const img = document.createElement('img');
-    img.src = src;
     img.alt = '';
     img.draggable = false;
     img.decoding = 'async';
@@ -586,40 +640,106 @@ function loadIcon(ic: HTMLElement, letter: HTMLElement | null, cands: IconCandid
     const idle = setTimeout(function () {
       if (done || settled) return;
       done = true;
-      (img as HTMLImageElement & { _done: boolean })._done = true;
       if (img.parentNode) img.remove();
-      allDone();
-    }, 4000);
-    img.addEventListener('load', function () {
+      allPendingDone();
+    }, 7500);
+
+    function resolve(ok: boolean, w: number, h: number): void {
       if (done || settled) return;
       done = true;
-      (img as HTMLImageElement & { _done: boolean })._done = true;
       clearTimeout(idle);
-      const w = img.naturalWidth, h = img.naturalHeight;
-      if (w < 16 || h < 16 || (chip && w <= 16)) {
+      if (!ok || isFake(c, w, h)) {
         if (img.parentNode) img.remove();
-        allDone();
+        allPendingDone();
         return;
       }
-      if (preferred) {
-        bestW = w; bestImg = img;
-        finalize();
-        return;
+      const rank = c.rank;
+      // Prefer the sharper image; break ties by source trust. Sizes above 128px
+      // are treated as equal — beyond that there's no gain at tile size.
+      const effW = Math.min(w, 128);
+      const effBW = Math.min(bestW, 128);
+      const improved = !bestImg || effW > effBW || (effW === effBW && rank > bestRank);
+      if (improved) {
+        bestRank = rank; bestW = w; bestImg = img; bestSrc = c.src;
+        showBest();
+        maybeSettle();
       }
-      if (w > bestW) { bestW = w; bestImg = img; }
-      if (w >= 128 && !hasPreferred) finalize();
-      else allDone();
+      allPendingDone();
+    }
+
+    img.addEventListener('load', function () {
+      resolve(true, img.naturalWidth, img.naturalHeight);
     });
-    img.addEventListener('error', function () {
-      if (done || settled) return;
-      done = true;
-      (img as HTMLImageElement & { _done: boolean })._done = true;
-      clearTimeout(idle);
-      if (img.parentNode) img.remove();
-      allDone();
-    });
+    img.addEventListener('error', function () { resolve(false, 0, 0); });
+
+    // Attach so the image definitely loads (a detached <img> won't reliably load
+    // in the extension page); candidates are hidden until one wins, so the letter
+    // cross-fades to a single icon without multi-icon flicker. Direct <img> src
+    // (no fetch) keeps first paint fast.
     ic.appendChild(img);
+    img.style.opacity = '0';
+    img.src = c.src;
   }
+
+  function allPendingDone(): void {
+    pending--;
+    if (pending <= 0) finalize();
+  }
+}
+
+/* ─── background favicon prefetch ─── */
+// Warm every site's icon in the background (paced, after the first page settles)
+// so flipping to any page shows fully-formed tiles instead of a page of letters
+// that pop in one-by-one — that's what caused the tab-change flicker. Pacing in
+// small batches keeps it from competing with the visible page's loads.
+let prefetchTimer: ReturnType<typeof setTimeout> | null = null;
+let prefetchQueue: number[] = [];
+let prefetchPos = 0;
+
+function prefetchStep(): void {
+  if (prefetchPos >= prefetchQueue.length) { prefetchTimer = null; return; }
+  const host = document.getElementById('__iconPrefetch') as HTMLElement | null;
+  if (!host) { prefetchTimer = null; return; }
+  let batch = 4;
+  while (batch > 0 && prefetchPos < prefetchQueue.length) {
+    const site = state.sites[prefetchQueue[prefetchPos]];
+    prefetchPos++; batch--;
+    if (!site || !site.url) continue;
+    const key = site.url;
+    if (faviconCache[key] !== undefined || iconLoading[key]) continue;
+    iconLoading[key] = true;
+    const ic = el('span', 'icon');
+    const letter = el('span', 'letter', initials(site.name));
+    ic.appendChild(letter);
+    host.appendChild(ic);
+    const cands = iconCandidates(site, iconDeep);
+    if (cands.length) loadIcon(ic, letter, cands, key);
+    else { iconLoading[key] = false; faviconCache[key] = false; }
+  }
+  if (prefetchPos < prefetchQueue.length) prefetchTimer = setTimeout(prefetchStep, 300);
+  else prefetchTimer = null;
+}
+
+function prefetchRemaining(): void {
+  if (state.sites.length === 0) return;
+  let host = document.getElementById('__iconPrefetch') as HTMLElement | null;
+  if (!host) {
+    host = el('div', '');
+    host.id = '__iconPrefetch';
+    host.setAttribute('style', 'position:absolute;left:-9999px;top:-9999px;width:0;height:0;overflow:hidden;pointer-events:none;');
+    document.body.appendChild(host);
+  }
+  prefetchQueue = [];
+  for (let i = 0; i < state.sites.length; i++) {
+    const site = state.sites[i];
+    if (!site || !site.url) continue;
+    const key = site.url;
+    if (faviconCache[key] !== undefined || iconLoading[key]) continue;
+    prefetchQueue.push(i);
+  }
+  prefetchPos = 0;
+  if (prefetchTimer) clearTimeout(prefetchTimer);
+  if (prefetchQueue.length) prefetchTimer = setTimeout(prefetchStep, 200);
 }
 
 function tileEl(site: Site, i: number): HTMLElement {
@@ -650,7 +770,7 @@ function tileEl(site: Site, i: number): HTMLElement {
   } else if (cached === undefined && !iconLoading[key]) {
     iconLoading[key] = true;
     if (persistedIcons[key] && !site.icon) {
-      loadIcon(ic, letter, [{ src: persistedIcons[key], preferred: true }], key, function () {
+      loadIcon(ic, letter, [{ src: persistedIcons[key], rank: 100, service: serviceOf(persistedIcons[key]) }], key, function () {
         delete persistedIcons[key];
         delete faviconCache[key];
         for (let i = pageStart(); i <= pageEnd(); i++) {
@@ -770,25 +890,30 @@ function goPage(p: number): void {
 
 function animatePage(dir: number): void {
   if (!grid || !scrollArea) return;
+  const wrap = grid.parentElement as HTMLElement | null;
+  if (!wrap) return;
+  const wp: HTMLElement = wrap;
   grid.classList.remove('anim-next', 'anim-prev', 'anim-reorder');
   if (pageGhost) { pageGhost.remove(); pageGhost = null; }
   if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const ghost = grid.cloneNode(true) as HTMLElement;
   ghost.classList.remove('anim-next', 'anim-prev', 'anim-reorder', 'dragging-active');
   ghost.classList.add('page-snapshot', dir > 0 ? 'page-out-next' : 'page-out-prev');
+  const wr = wp.getBoundingClientRect();
   const r = grid.getBoundingClientRect();
-  const sr = scrollArea.getBoundingClientRect();
   ghost.style.position = 'absolute';
-  ghost.style.left = (r.left - sr.left + scrollArea.scrollLeft) + 'px';
-  ghost.style.top = (r.top - sr.top + scrollArea.scrollTop) + 'px';
+  ghost.style.left = (r.left - wr.left) + 'px';
+  ghost.style.top = (r.top - wr.top) + 'px';
   ghost.style.width = r.width + 'px';
   ghost.style.margin = '0';
-  scrollArea.appendChild(ghost);
+  wp.appendChild(ghost);
+  wp.classList.add('page-flipping');
   pageGhost = ghost;
 
   function drop(): void {
     if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
     if (pageGhost === ghost) pageGhost = null;
+    wp.classList.remove('page-flipping');
   }
   ghost.addEventListener('animationend', drop, { once: true });
   setTimeout(drop, 600);
@@ -1385,7 +1510,7 @@ function renderIconPicker(rawUrl: string, selectedSrc: string): void {
   (metaIcons[url] || []).forEach(function (src: string) {
     if (!src || seen[src]) return;
     seen[src] = true;
-    cands.push({ src: src, preferred: false });
+    cands.push({ src: src, rank: 76, service: 'site' });
   });
   let shown = 0;
   for (let i = 0; i < cands.length && shown < 8; i++) {
@@ -2065,6 +2190,10 @@ function init(): void {
   renderAll();
   syncStart();
   setInterval(function () { retryAllFailed(); }, 120000);
+  // After the first page paints, warm every icon in the background (paced,
+  // once the visible page has had time to settle) so flipping tabs shows
+  // fully-formed tiles (no letter→icon pop-in flicker).
+  setTimeout(prefetchRemaining, 2000);
 }
 
 document.addEventListener('DOMContentLoaded', init);

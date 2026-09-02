@@ -145,10 +145,18 @@ kbd {
 
 /* grid stack in flow */
 .grid-wrap {
+  position: relative; /* anchor for the absolute page-snapshot clone */
   margin: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+/* during a page flip the incoming grid and the departing snapshot slide PAST
+   each other (opposite directions). Clipping here means the two panels never
+   overlap on screen — no double-vision, no wallpaper see-through. */
+.grid-wrap.page-flipping {
+  overflow: hidden;
 }
 
 .grid {
@@ -169,33 +177,37 @@ kbd {
   pointer-events: none;
 }
 
-.grid.anim-next { animation: page-next 0.38s cubic-bezier(0.16, 1, 0.3, 1); }
-.grid.anim-prev { animation: page-prev 0.38s cubic-bezier(0.16, 1, 0.3, 1); }
+.grid.anim-next { animation: page-next 0.4s cubic-bezier(0.22, 1, 0.36, 1); }
+.grid.anim-prev { animation: page-prev 0.4s cubic-bezier(0.22, 1, 0.36, 1); }
 
+/* full-width opaque push: the incoming page slides in from off-screen (100%),
+   fully opaque the whole way — no opacity fade, so nothing shows through.
+   The wrap clip keeps it from overlapping the outgoing snapshot. */
 @keyframes page-next {
-  from { opacity: 0; transform: translateX(90px); }
-  to { opacity: 1; transform: translateX(0); }
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
 }
 
 @keyframes page-prev {
-  from { opacity: 0; transform: translateX(-90px); }
-  to { opacity: 1; transform: translateX(0); }
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
 }
 
-/* snapshot of the departing page: slides out while the new page slides in */
+/* snapshot of the departing page: slides out in the opposite direction while
+   the new page slides in (both clipped by .grid-wrap.page-flipping) */
 .page-snapshot {
-  animation-duration: 0.38s;
-  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-duration: 0.4s;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   animation-fill-mode: forwards;
-  will-change: transform, opacity;
+  will-change: transform;
   z-index: 2;
   pointer-events: none;
 }
 .page-snapshot.page-out-next { animation-name: page-out-next; }
 .page-snapshot.page-out-prev { animation-name: page-out-prev; }
 
-@keyframes page-out-next { to { opacity: 0; transform: translateX(-90px); } }
-@keyframes page-out-prev { to { opacity: 0; transform: translateX(90px); } }
+@keyframes page-out-next { to { transform: translateX(-100%); } }
+@keyframes page-out-prev { to { transform: translateX(100%); } }
 
 @media (prefers-reduced-motion: reduce) {
   .grid.anim-next,
