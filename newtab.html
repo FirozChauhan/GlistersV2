@@ -275,30 +275,30 @@
     <section class="set-group" id="grp-sync">
       <h3 class="set-label">sync</h3>
 
-      <div class="set-row sync-row">
-        <span class="sync-pill off" id="syncPill" role="status" aria-live="polite">
-          <span class="sync-dot" id="syncDot"></span>
-          <em id="syncStatus" class="sync-text">starting…</em>
-        </span>
-        <button type="button" class="btn-secondary" id="syncNow">sync now</button>
+      <div class="sync-card off" id="syncCard">
+        <span class="sync-dot" id="syncDot"></span>
+        <span class="sync-text" id="syncStatus">starting…</span>
+        <button type="button" class="sync-btn" id="syncNow" title="sync now">sync now</button>
       </div>
+
       <div class="set-row backup-row">
         <span class="set-name">Backup</span>
         <div class="backup-btns">
           <button type="button" class="btn-secondary" id="backupDownload" title="download the whole save (shortcuts + settings + bookmarks + wallpapers) as a JSON file">download</button>
           <button type="button" class="btn-secondary" id="backupLoad" title="import a save from a JSON file — replaces the current save">load…</button>
-          <button type="button" class="btn-secondary" id="restorePrevious" title="undo the last cloud sync — restore the save that was current before it">restore previous</button>
+          <button type="button" class="btn-secondary" id="restorePrevious" title="undo the last cloud sync — restore the save that was current before it">undo last sync</button>
           <input type="file" id="backupLoadInput" accept="application/json,.json" hidden>
         </div>
       </div>
+
       <div class="set-row storage-row">
         <span class="set-name">Storage</span>
         <div class="storage-chips">
-          <span class="st-chip"><em>id</em><b id="stId">…</b></span>
-          <span class="st-chip"><em>local</em><b id="stLocal" class="st-val">…</b></span>
-          <span class="st-chip"><em>ext</em><b id="stExt" class="st-val">…</b></span>
+          <span class="st-chip" title="size of the save stored on this device"><em>local</em><b id="stLocal" class="st-val">…</b></span>
+          <span class="st-chip" title="size of the save in the browser extension store"><em>ext</em><b id="stExt" class="st-val">…</b></span>
         </div>
       </div>
+
       <div class="set-row reset-row">
         <span class="set-name">Restore defaults</span>
         <button type="button" class="btn-reset" id="resetSettings">reset all</button>

@@ -175,6 +175,14 @@
         const metaStatus = $("#metaStatus");
         const syncNow = $("#syncNow");
         const resetSettings = $("#resetSettings");
+        const syncCard = $("#syncCard");
+        const syncStatus = $("#syncStatus");
+        const stLocal = $("#stLocal");
+        const stExt = $("#stExt");
+        const backupDownload = $("#backupDownload");
+        const backupLoad = $("#backupLoad");
+        const backupLoadInput = $("#backupLoadInput");
+        const restorePrevious = $("#restorePrevious");
         const emptyAdd = $("#emptyAdd");
         function readLocal() {
           try {
@@ -1783,6 +1791,68 @@
           closeDrawer();
           if (window.WALLS) window.WALLS.applySafe();
         });
+        if (backupDownload) backupDownload.addEventListener("click", function() {
+          const d = doc();
+          const blob = new Blob([JSON.stringify(d, null, 2)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "glisters-backup-" + (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + ".json";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(function() {
+            URL.revokeObjectURL(url);
+          }, 1500);
+        });
+        if (backupLoad && backupLoadInput) backupLoad.addEventListener("click", function() {
+          backupLoadInput.click();
+        });
+        if (backupLoadInput) backupLoadInput.addEventListener("change", function() {
+          const f = backupLoadInput.files && backupLoadInput.files[0];
+          backupLoadInput.value = "";
+          if (!f) return;
+          const r = new FileReader();
+          r.onload = function() {
+            let norm = null;
+            try {
+              norm = normalize(JSON.parse(String(r.result || "")));
+            } catch {
+            }
+            if (!norm) {
+              setSyncStatus("error", "bad backup file");
+              return;
+            }
+            snapshotPrevious();
+            adopt(norm);
+            setSyncStatus("synced", "backup loaded");
+            updateStorageInfo();
+          };
+          r.onerror = function() {
+            setSyncStatus("error", "couldn't read file");
+          };
+          r.readAsText(f);
+        });
+        if (restorePrevious) restorePrevious.addEventListener("click", function() {
+          try {
+            const raw = localStorage.getItem(STORE_KEY + ":prev");
+            if (!raw) {
+              setSyncStatus("ready", "no previous save yet");
+              return;
+            }
+            const norm = normalize(JSON.parse(raw));
+            if (!norm) {
+              setSyncStatus("error", "previous save unreadable");
+              return;
+            }
+            snapshotPrevious();
+            adopt(norm);
+            setSyncStatus("synced", "previous save restored");
+            updateStorageInfo();
+          } catch {
+            setSyncStatus("error", "previous save unreadable");
+          }
+        });
         if (scrim) {
           scrim.addEventListener("keydown", function(e) {
             if (e.key === "Escape") {
@@ -1992,6 +2062,7 @@
           SETTING_RANGES.forEach(syncSettingControl);
           SETTING_CHECKS.forEach(syncSettingControl);
           syncSettingControl("labelColor");
+          updateStorageInfo();
         }
         function commitSetting(k) {
           if (settingTimer) clearTimeout(settingTimer);
@@ -2044,6 +2115,64 @@
             });
           }
         }
+        const SYNC_STATES = ["off", "ready", "syncing", "synced", "error"];
+        function setSyncStatus(state2, text) {
+          if (!syncCard) return;
+          const s = SYNC_STATES.indexOf(state2) >= 0 ? state2 : "ready";
+          if (s === "syncing" && syncCard.classList.contains("syncing")) {
+            if (syncStatus && text !== void 0) syncStatus.textContent = text;
+            return;
+          }
+          syncCard.classList.remove("off", "ready", "syncing", "synced", "error");
+          syncCard.classList.add(s);
+          if (syncStatus && text !== void 0) syncStatus.textContent = text;
+          if (syncNow) syncNow.disabled = s === "syncing";
+        }
+        function bytes(n) {
+          if (!isFinite(n) || n < 0) return "—";
+          if (n < 1024) return n + " B";
+          if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " kB";
+          return (n / (1024 * 1024)).toFixed(2) + " MB";
+        }
+        function updateStorageInfo() {
+          if (stLocal) {
+            try {
+              const raw = localStorage.getItem(STORE_KEY);
+              const ok = !!raw;
+              stLocal.textContent = ok ? bytes(new Blob([raw]).size) : "—";
+              stLocal.classList.toggle("ok", ok);
+              stLocal.classList.toggle("bad", !ok);
+            } catch {
+              stLocal.textContent = "—";
+            }
+          }
+          if (stExt && window.chrome && chrome.storage && chrome.storage.local) {
+            try {
+              chrome.storage.local.get(STORE_KEY, function(o) {
+                if (!stExt) return;
+                try {
+                  const v = o[STORE_KEY];
+                  const ok = !!v;
+                  const raw = ok ? JSON.stringify(v) : null;
+                  stExt.textContent = ok ? bytes(new Blob([raw]).size) : "—";
+                  stExt.classList.toggle("ok", ok);
+                  stExt.classList.toggle("bad", !ok);
+                } catch {
+                  stExt.textContent = "—";
+                }
+              });
+            } catch {
+              stExt.textContent = "—";
+            }
+          }
+        }
+        function snapshotPrevious() {
+          try {
+            const cur = localStorage.getItem(STORE_KEY);
+            if (cur) localStorage.setItem(STORE_KEY + ":prev", cur);
+          } catch {
+          }
+        }
         function scheduleCloud() {
           if (!SYNC_ENABLED) return;
           dirty = true;
@@ -2060,12 +2189,16 @@
             cloudTimer = null;
           }
           if (!window.SYNC) return;
+          setSyncStatus("syncing");
           const d = doc();
           const onOk = function() {
             dirty = false;
+            setSyncStatus("synced", "synced just now");
+            updateStorageInfo();
           };
           window.SYNC.push(d).then(onOk, function() {
             dirty = true;
+            setSyncStatus("error", "offline — will retry");
             if (retryTimer) clearTimeout(retryTimer);
             retryTimer = setTimeout(function() {
               pushCloud();
@@ -2074,8 +2207,10 @@
         }
         function pullCloud() {
           if (!SYNC_ENABLED || !window.SYNC) return;
+          setSyncStatus("syncing");
           window.SYNC.pull().then(function(remote) {
             if (!remote) {
+              setSyncStatus("error", "cloud empty");
               bootstrapSync();
               return;
             }
@@ -2093,8 +2228,12 @@
               pushCloud();
               return;
             }
+            snapshotPrevious();
             adopt(remote);
+            setSyncStatus("synced", "restored from cloud");
+            updateStorageInfo();
           }).catch(function() {
+            setSyncStatus("error", "offline — will retry");
             bootstrapSync();
           });
         }
@@ -2136,7 +2275,13 @@
           if (window.WALLS && window.WALLS.restore && n.walls) window.WALLS.restore(n.walls);
         }
         function syncStart() {
-          if (!SYNC_ENABLED || !window.SYNC) return;
+          if (!SYNC_ENABLED || !window.SYNC) {
+            setSyncStatus("off", "sync is off");
+            updateStorageInfo();
+            return;
+          }
+          setSyncStatus("ready", "ready");
+          updateStorageInfo();
           if (seededFromLinks) {
             pullCloud();
             return;

@@ -173,8 +173,16 @@ const drawerClose = $('#drawerClose') as HTMLElement | null;
 const drawerBody = $('#drawerBody') as HTMLElement | null;
 const iconPicker = $('#iconPicker') as HTMLElement | null;
 const metaStatus = $('#metaStatus') as HTMLElement | null;
-const syncNow = $('#syncNow') as HTMLElement | null;
+const syncNow = $('#syncNow') as HTMLButtonElement | null;
 const resetSettings = $('#resetSettings') as HTMLElement | null;
+const syncCard = $('#syncCard') as HTMLElement | null;
+const syncStatus = $('#syncStatus') as HTMLElement | null;
+const stLocal = $('#stLocal') as HTMLElement | null;
+const stExt = $('#stExt') as HTMLElement | null;
+const backupDownload = $('#backupDownload') as HTMLElement | null;
+const backupLoad = $('#backupLoad') as HTMLElement | null;
+const backupLoadInput = $('#backupLoadInput') as HTMLInputElement | null;
+const restorePrevious = $('#restorePrevious') as HTMLElement | null;
 const emptyAdd = $('#emptyAdd') as HTMLElement | null;
 
 /* ─── state helpers ─── */
@@ -1780,6 +1788,64 @@ if (resetSettings) resetSettings.addEventListener('click', function () {
   if (window.WALLS) window.WALLS.applySafe();
 });
 
+if (backupDownload) backupDownload.addEventListener('click', function () {
+  const d = doc();
+  const blob = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'glisters-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+});
+
+if (backupLoad && backupLoadInput) backupLoad.addEventListener('click', function () { backupLoadInput.click(); });
+if (backupLoadInput) backupLoadInput.addEventListener('change', function () {
+  const f = backupLoadInput.files && backupLoadInput.files[0];
+  backupLoadInput.value = ''; // allow re-selecting the same file
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = function () {
+    let norm: SaveDoc | null = null;
+    try {
+      norm = normalize(JSON.parse(String(r.result || '')));
+    } catch { /* fallthrough */ }
+    if (!norm) {
+      setSyncStatus('error', 'bad backup file');
+      return;
+    }
+    snapshotPrevious();
+    adopt(norm);
+    setSyncStatus('synced', 'backup loaded');
+    updateStorageInfo();
+  };
+  r.onerror = function () { setSyncStatus('error', 'couldn\'t read file'); };
+  r.readAsText(f);
+});
+
+if (restorePrevious) restorePrevious.addEventListener('click', function () {
+  try {
+    const raw = localStorage.getItem(STORE_KEY + ':prev');
+    if (!raw) {
+      setSyncStatus('ready', 'no previous save yet');
+      return;
+    }
+    const norm = normalize(JSON.parse(raw));
+    if (!norm) {
+      setSyncStatus('error', 'previous save unreadable');
+      return;
+    }
+    snapshotPrevious();
+    adopt(norm);
+    setSyncStatus('synced', 'previous save restored');
+    updateStorageInfo();
+  } catch {
+    setSyncStatus('error', 'previous save unreadable');
+  }
+});
+
 if (scrim) {
   scrim.addEventListener('keydown', function (e: KeyboardEvent) {
     if (e.key === 'Escape') {
@@ -2004,6 +2070,7 @@ function syncDrawerDisplay(): void {
   SETTING_RANGES.forEach(syncSettingControl);
   SETTING_CHECKS.forEach(syncSettingControl);
   syncSettingControl('labelColor');
+  updateStorageInfo();
 }
 
 function commitSetting(k: keyof Settings): void {
@@ -2066,6 +2133,64 @@ if (drawerBody) {
 
 /* ─── sync ─── */
 
+const SYNC_STATES = ['off', 'ready', 'syncing', 'synced', 'error'];
+
+function setSyncStatus(state: string, text?: string): void {
+  if (!syncCard) return;
+  const s = SYNC_STATES.indexOf(state) >= 0 ? state : 'ready';
+  // Don't restart the pulsing animation if we're already animating this state
+  // (e.g. autosync firing repeatedly while editing) — just refresh the text.
+  if (s === 'syncing' && syncCard.classList.contains('syncing')) {
+    if (syncStatus && text !== undefined) syncStatus.textContent = text;
+    return;
+  }
+  syncCard.classList.remove('off', 'ready', 'syncing', 'synced', 'error');
+  syncCard.classList.add(s);
+  if (syncStatus && text !== undefined) syncStatus.textContent = text;
+  if (syncNow) syncNow.disabled = s === 'syncing';
+}
+
+function bytes(n: number): string {
+  if (!isFinite(n) || n < 0) return '—';
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' kB';
+  return (n / (1024 * 1024)).toFixed(2) + ' MB';
+}
+
+function updateStorageInfo(): void {
+  if (stLocal) {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      const ok = !!raw;
+      stLocal.textContent = ok ? bytes(new Blob([raw as string]).size) : '—';
+      stLocal.classList.toggle('ok', ok);
+      stLocal.classList.toggle('bad', !ok);
+    } catch { stLocal.textContent = '—'; }
+  }
+  if (stExt && window.chrome && chrome.storage && chrome.storage.local) {
+    try {
+      chrome.storage.local.get(STORE_KEY, function (o: { [key: string]: unknown }) {
+        if (!stExt) return;
+        try {
+          const v = o[STORE_KEY];
+          const ok = !!v;
+          const raw = ok ? JSON.stringify(v) : null;
+          stExt.textContent = ok ? bytes(new Blob([raw as string]).size) : '—';
+          stExt.classList.toggle('ok', ok);
+          stExt.classList.toggle('bad', !ok);
+        } catch { stExt.textContent = '—'; }
+      });
+    } catch { stExt.textContent = '—'; }
+  }
+}
+
+function snapshotPrevious(): void {
+  try {
+    const cur = localStorage.getItem(STORE_KEY);
+    if (cur) localStorage.setItem(STORE_KEY + ':prev', cur);
+  } catch { /* noop */ }
+}
+
 function scheduleCloud(): void {
   if (!SYNC_ENABLED) return;
   dirty = true;
@@ -2078,12 +2203,16 @@ function pushCloud(): void {
   dirty = false;
   if (cloudTimer) { clearTimeout(cloudTimer); cloudTimer = null; }
   if (!window.SYNC) return;
+  setSyncStatus('syncing');
   const d = doc();
   const onOk = function (): void {
     dirty = false;
+    setSyncStatus('synced', 'synced just now');
+    updateStorageInfo();
   };
   window.SYNC.push(d).then(onOk, function () {
     dirty = true;
+    setSyncStatus('error', 'offline — will retry');
     if (retryTimer) clearTimeout(retryTimer);
     retryTimer = setTimeout(function () { pushCloud(); }, 20000);
   });
@@ -2091,8 +2220,9 @@ function pushCloud(): void {
 
 function pullCloud(): void {
   if (!SYNC_ENABLED || !window.SYNC) return;
+  setSyncStatus('syncing');
   window.SYNC.pull().then(function (remote: SaveDoc | null) {
-    if (!remote) { bootstrapSync(); return; }
+    if (!remote) { setSyncStatus('error', 'cloud empty'); bootstrapSync(); return; }
     const local = readLocal();
     // Favourites handling: the Gist is the source of truth, but if it lost its
     // favourites (the original bug) while the local state still has them, recover
@@ -2108,8 +2238,14 @@ function pullCloud(): void {
       pushCloud();
       return;
     }
+    snapshotPrevious();
     adopt(remote);
-  }).catch(function () { bootstrapSync(); });
+    setSyncStatus('synced', 'restored from cloud');
+    updateStorageInfo();
+  }).catch(function () {
+    setSyncStatus('error', 'offline — will retry');
+    bootstrapSync();
+  });
 }
 
 function adopt(remote: SaveDoc): void {
@@ -2148,7 +2284,13 @@ function paintState(n: SaveDoc): void {
 }
 
 function syncStart(): void {
-  if (!SYNC_ENABLED || !window.SYNC) return;
+  if (!SYNC_ENABLED || !window.SYNC) {
+    setSyncStatus('off', 'sync is off');
+    updateStorageInfo();
+    return;
+  }
+  setSyncStatus('ready', 'ready');
+  updateStorageInfo();
   if (seededFromLinks) {
     pullCloud();
     return;
