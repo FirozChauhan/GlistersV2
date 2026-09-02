@@ -260,22 +260,23 @@ kbd {
   z-index: 2;
   pointer-events: none;
   font-size: 9px;
-  color: #ff3b6f;
+  color: var(--heart-color, #ff3b6f);
   line-height: 1;
   font-family: serif;
-  top: 50%;
-  left: 50%;
   /* the element + these text-shadow copies = a small cluster of hearts that
-     float together and fade when the element animates. */
+     float together and fade when the element animates. Color + position are
+     randomised per hover via --heart-color / --heart-x / --heart-y. */
   text-shadow:
-    -9px -7px 0 #ff3b6f,
-    7px -11px 0 #ff3b6f,
-    -7px 9px 0 #ff3b6f,
-    11px 5px 0 #ff3b6f,
-    -11px 2px 0 #ff3b6f;
-  filter: drop-shadow(0 0 3px rgba(255, 59, 111, 0.6));
+    -9px -7px 0 var(--heart-color, #ff3b6f),
+    7px -11px 0 var(--heart-color, #ff3b6f),
+    -7px 9px 0 var(--heart-color, #ff3b6f),
+    11px 5px 0 var(--heart-color, #ff3b6f),
+    -11px 2px 0 var(--heart-color, #ff3b6f);
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--heart-color, #ff3b6f) 60%, transparent));
   opacity: 0;
   transform: translate(-50%, -50%) translateY(3px) scale(0.2);
+  top: var(--heart-y, 50%);
+  left: var(--heart-x, 50%);
 }
 .tile:hover .icon::after,
 .tile.focused .icon::after,

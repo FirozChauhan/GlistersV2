@@ -128,6 +128,7 @@ if (needSeed) {
 
 let focused = -1;
 let armed = -1;
+let heartIdx = -1; // last tile index that got random heart vars (avoids re-rolling mid-animation)
 let page = 0;
 let armTimer: ReturnType<typeof setTimeout> | null = null;
 let cloudTimer: ReturnType<typeof setTimeout> | null = null;
@@ -836,6 +837,28 @@ function renderTileStates(): void {
     t.classList.toggle('focused', ix === focused);
     t.classList.toggle('armed', ix === armed);
   }
+  // roll a fresh heart colour + position whenever focus moves onto a tile
+  // (keyboard nav, page flips). Mouse hover rolls directly in the mouseover
+  // handler; the heartIdx guard stops unrelated re-renders (arm timers etc.)
+  // from re-rolling the vars mid-animation.
+  if (focused >= 0 && focused !== heartIdx) {
+    heartIdx = focused;
+    const t = grid.querySelector<HTMLElement>('.tile[data-idx="' + focused + '"]');
+    if (t) setHeartRandom(t);
+  }
+}
+
+/* random heart burst vars for a tile: vibrant random colour + a random spot
+   on the icon (25–75% keeps the cluster inside the white circle). CSS reads
+   these via --heart-color / --heart-x / --heart-y, with fallbacks. */
+function setHeartRandom(t: HTMLElement): void {
+  const hue = Math.floor(Math.random() * 360);
+  const col = 'hsl(' + hue + ' 90% 65%)';
+  const x = 25 + Math.random() * 50;
+  const y = 25 + Math.random() * 50;
+  t.style.setProperty('--heart-color', col);
+  t.style.setProperty('--heart-x', x.toFixed(1) + '%');
+  t.style.setProperty('--heart-y', y.toFixed(1) + '%');
 }
 
 function updateEmpty(): void {
@@ -1129,6 +1152,7 @@ if (grid) {
     if (b) {
       grid.classList.add('mouse-nav');
       setFocused(parseInt(b.dataset.idx || '', 10));
+      setHeartRandom(b); // fresh random heart colour + spot on EVERY hover
     }
   });
 

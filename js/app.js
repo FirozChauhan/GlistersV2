@@ -127,6 +127,7 @@
         }
         let focused = -1;
         let armed = -1;
+        let heartIdx = -1;
         let page = 0;
         let armTimer = null;
         let cloudTimer = null;
@@ -819,6 +820,20 @@
             t.classList.toggle("focused", ix === focused);
             t.classList.toggle("armed", ix === armed);
           }
+          if (focused >= 0 && focused !== heartIdx) {
+            heartIdx = focused;
+            const t = grid.querySelector('.tile[data-idx="' + focused + '"]');
+            if (t) setHeartRandom(t);
+          }
+        }
+        function setHeartRandom(t) {
+          const hue = Math.floor(Math.random() * 360);
+          const col = "hsl(" + hue + " 90% 65%)";
+          const x = 25 + Math.random() * 50;
+          const y = 25 + Math.random() * 50;
+          t.style.setProperty("--heart-color", col);
+          t.style.setProperty("--heart-x", x.toFixed(1) + "%");
+          t.style.setProperty("--heart-y", y.toFixed(1) + "%");
         }
         function updateEmpty() {
           if (!grid || !empty) return;
@@ -1124,6 +1139,7 @@
             if (b) {
               grid.classList.add("mouse-nav");
               setFocused(parseInt(b.dataset.idx || "", 10));
+              setHeartRandom(b);
             }
           });
           grid.addEventListener("click", function(e) {
