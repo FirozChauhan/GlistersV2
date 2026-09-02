@@ -152,13 +152,6 @@ kbd {
   align-items: center;
 }
 
-/* during a page flip the incoming grid and the departing snapshot slide PAST
-   each other (opposite directions). Clipping here means the two panels never
-   overlap on screen — no double-vision, no wallpaper see-through. */
-.grid-wrap.page-flipping {
-  overflow: hidden;
-}
-
 .grid {
   display: grid;
   grid-template-columns: repeat(var(--cols), var(--ts));
@@ -177,37 +170,37 @@ kbd {
   pointer-events: none;
 }
 
-.grid.anim-next { animation: page-next 0.4s cubic-bezier(0.22, 1, 0.36, 1); }
-.grid.anim-prev { animation: page-prev 0.4s cubic-bezier(0.22, 1, 0.36, 1); }
+.grid.anim-next { animation: page-next 0.15s ease-out; }
+.grid.anim-prev { animation: page-prev 0.15s ease-out; }
 
-/* full-width opaque push: the incoming page slides in from off-screen (100%),
-   fully opaque the whole way — no opacity fade, so nothing shows through.
-   The wrap clip keeps it from overlapping the outgoing snapshot. */
+/* blazing-fast crossfade — no slide. The new page fades in while the old
+   page's snapshot fades out on top of it. At 0.15s the brief overlap reads
+   as a clean dissolve, not a flash. */
 @keyframes page-next {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes page-prev {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-/* snapshot of the departing page: slides out in the opposite direction while
-   the new page slides in (both clipped by .grid-wrap.page-flipping) */
+/* snapshot of the departing page: fades out in place above the fading-in
+   new page (no movement, no offset → no double-vision) */
 .page-snapshot {
-  animation-duration: 0.4s;
-  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-duration: 0.15s;
+  animation-timing-function: ease-in;
   animation-fill-mode: forwards;
-  will-change: transform;
+  will-change: opacity;
   z-index: 2;
   pointer-events: none;
 }
 .page-snapshot.page-out-next { animation-name: page-out-next; }
 .page-snapshot.page-out-prev { animation-name: page-out-prev; }
 
-@keyframes page-out-next { to { transform: translateX(-100%); } }
-@keyframes page-out-prev { to { transform: translateX(100%); } }
+@keyframes page-out-next { to { opacity: 0; } }
+@keyframes page-out-prev { to { opacity: 0; } }
 
 @media (prefers-reduced-motion: reduce) {
   .grid.anim-next,
@@ -318,13 +311,17 @@ kbd {
 .tile .letter.out { opacity: 0; }
 
 /* favicon cross-fade: the letter starts visible, the icon fades in on top of it
-   so tiles settle smoothly instead of a hard letter → icon pop. */
+   so tiles settle smoothly instead of a hard letter → icon pop. Cached icons
+   (re-rendered on page flip) skip the animation via .instant. */
 @keyframes tileIconIn {
-  from { opacity: 0; transform: scale(0.85); }
-  to   { opacity: 1; transform: scale(1); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 .tile .icon img.loaded {
-  animation: tileIconIn 0.22s ease;
+  animation: tileIconIn 0.18s ease;
+}
+.tile .icon img.loaded.instant {
+  animation: none;
 }
 
 .tile img {

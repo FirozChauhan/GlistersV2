@@ -761,12 +761,9 @@ function tileEl(site: Site, i: number): HTMLElement {
     img.draggable = false;
     img.decoding = 'async';
     img.referrerPolicy = 'no-referrer';
-    img.classList.add('loaded');
+    img.classList.add('loaded', 'instant');
     ic.appendChild(img);
-    if (letter) {
-      letter.classList.add('out');
-      setTimeout(function () { letter.style.display = 'none'; }, 230);
-    }
+    if (letter) letter.style.display = 'none';
   } else if (cached === undefined && !iconLoading[key]) {
     iconLoading[key] = true;
     if (persistedIcons[key] && !site.icon) {
@@ -907,13 +904,11 @@ function animatePage(dir: number): void {
   ghost.style.width = r.width + 'px';
   ghost.style.margin = '0';
   wp.appendChild(ghost);
-  wp.classList.add('page-flipping');
   pageGhost = ghost;
 
   function drop(): void {
     if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
     if (pageGhost === ghost) pageGhost = null;
-    wp.classList.remove('page-flipping');
   }
   ghost.addEventListener('animationend', drop, { once: true });
   setTimeout(drop, 600);
