@@ -1941,7 +1941,7 @@ function syncBarSel(): void {
   }
 }
 
-let barHint: HTMLElement | null = null;
+let barHint: HTMLElement | null = $('#barHint') as HTMLElement | null;
 const barList = $('#barList') as HTMLElement | null;
 
 function openBar(): void {
@@ -2004,6 +2004,39 @@ if (barInput) {
     } else if (e.key === 'Escape') {
       e.preventDefault();
       closeBar();
+    }
+  });
+  barInput.addEventListener('paste', function (e: ClipboardEvent) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image/') === 0) {
+        e.preventDefault();
+        const file = items[i].getAsFile();
+        if (!file) return;
+        if (barInput) barInput.value = '🔍 reverse image search…';
+        const fd = new FormData();
+        fd.append('encoded_image', file, file.name || 'pasted.png');
+        fd.append('image_url', '');
+        fd.append('image_content', '');
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', 'https://www.google.com/searchbyimage/upload');
+        xhr.onloadend = function () {
+          if (xhr.responseURL && xhr.responseURL.indexOf('http') === 0) {
+            closeBar();
+            openInNewTab(xhr.responseURL);
+          } else {
+            if (barInput) barInput.value = '';
+            if (barHint) barHint.textContent = 'image search failed';
+          }
+        };
+        xhr.onerror = function () {
+          if (barInput) barInput.value = '';
+          if (barHint) barHint.textContent = 'image search failed';
+        };
+        xhr.send(fd);
+        return;
+      }
     }
   });
 }
