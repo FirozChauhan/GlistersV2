@@ -17,12 +17,18 @@
         const FAV_MAX = 60;
         const REFRESH_MS = 24 * 60 * 60 * 1e3;
         const WH_SEARCH = "https://wallhaven.cc/api/v1/search?sorting=toplist&topRange=1M&per_page=24";
-        const PURE_OPTS = ["100", "110", "111"];
+        const PURE_OPTS = ["100", "010", "001"];
         const CAT_OPTS = ["100", "010", "001"];
         const KEY_RE = /^[A-Za-z0-9]{8,64}$/;
         function cleanKey(v) {
           const k = String(v == null ? "" : v).trim();
           return k ? KEY_RE.test(k) ? k : "" : "";
+        }
+        function normalizePurity(v) {
+          const s = String(v == null ? "" : v);
+          if (s === "110") return "010";
+          if (s === "111") return "001";
+          return PURE_OPTS.indexOf(s) !== -1 ? s : "100";
         }
         const CFG = window.CONFIG || {};
         const CFG_KEY = typeof CFG.wallhavenKey === "string" ? cleanKey(CFG.wallhavenKey) : "";
@@ -267,7 +273,7 @@
           state.list = savedList.length ? savedList.slice(0, POOL_SIZE) : FALLBACK.slice();
           state.key = d && typeof d.key === "string" && (d.key === "" || isUrl(d.key)) ? d.key : null;
           state.lastRefresh = d && typeof d.lastRefresh === "number" ? d.lastRefresh : 0;
-          state.purity = d && PURE_OPTS.indexOf(String(d.purity)) !== -1 ? String(d.purity) : "100";
+          state.purity = normalizePurity(d && d.purity);
           state.category = d && CAT_OPTS.indexOf(String(d.category)) !== -1 ? String(d.category) : "100";
           state.apikey = d && typeof d.apikey === "string" ? cleanKey(d.apikey) : "";
           if (!state.apikey) state.apikey = CFG_KEY;
@@ -960,7 +966,7 @@
         function renderFilterButtons() {
           if (purityBtns && categoryBtns) {
             purityBtns.forEach(function(b) {
-              if (b.dataset.wallPurity === "111") {
+              if (b.dataset.wallPurity === "001") {
                 b.disabled = !state.apikey;
                 b.title = state.apikey ? "" : "requires a wallhaven API key";
               }
@@ -977,7 +983,7 @@
         function setFilter(type, value) {
           const opts = type === "purity" ? PURE_OPTS : CAT_OPTS;
           if (opts.indexOf(value) === -1) return Promise.resolve(false);
-          if (type === "purity" && value === "111" && !state.apikey) return Promise.resolve(false);
+          if (type === "purity" && value === "001" && !state.apikey) return Promise.resolve(false);
           const key = type === "purity" ? "purity" : "category";
           if (state[key] === value) return Promise.resolve(true);
           state[key] = value;
@@ -990,9 +996,9 @@
           if (key === state.apikey) return Promise.resolve(true);
           state.apikey = key;
           touch();
-          if (state.purity === "111") {
+          if (state.purity === "001") {
             if (!key) {
-              state.purity = "110";
+              state.purity = "010";
               touch();
             }
             renderFilterButtons();

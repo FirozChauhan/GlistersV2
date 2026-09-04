@@ -528,6 +528,28 @@ function replaceTile(idx: number): void {
   renderTileStates();
 }
 
+// After a favicon load settles, make sure a tile that is ALREADY on the
+// current page picks up the result. This is the fix for icons that only
+// appeared after flipping pages: if the user flips to a page while its icons
+// are still loading (or a background prefetch finishes for a site already on
+// screen), the visible tile was built before the load completed and had no way
+// to know — so it sat on the fallback letter until the next renderGrid.
+// Success writes faviconCache[key], so the repaint clones the now-cached image
+// and shows it instantly. Failures are left to the existing retry/backoff path.
+function refreshKeyTile(key: string): void {
+  if (!key || !grid || mode !== 'none' || dragUi) return;
+  for (let i = pageStart(); i <= pageEnd(); i++) {
+    const s = state.sites[i];
+    if (!s || s.url !== key) continue;
+    const t = grid.querySelector<HTMLElement>('.tile[data-idx="' + i + '"]');
+    if (!t) continue;
+    // Only repaint if this tile hasn't already received an icon.
+    const hasIcon = !!t.querySelector('.icon img.loaded');
+    if (!hasIcon) replaceTile(i);
+    return;
+  }
+}
+
 function retryAllFailed(): void {
   if (mode !== 'none' || dragUi) return;
   let any = false;
@@ -612,6 +634,9 @@ function loadIcon(ic: HTMLElement, letter: HTMLElement | null, cands: IconCandid
         faviconCache[key] = bestImg;
         if (bestSrc) persistIcon(key, bestSrc);
         else if (bestImg.src) persistIcon(key, bestImg.src);
+        // If this key is on the visible page as a letter-only tile (because the
+        // tile was rendered while the load was still in flight), repaint it now.
+        refreshKeyTile(key);
       }
     } else if (key) {
       faviconCache[key] = false;
@@ -786,6 +811,13 @@ function tileEl(site: Site, i: number): HTMLElement {
     } else {
       const cands = iconCandidates(site, iconDeep);
       if (cands.length) loadIcon(ic, letter, cands, key);
+      else {
+        // No candidates (e.g. a mailto:/non-http link): clear the in-flight
+        // flag so this key isn't permanently stranded as "loading", and cache
+        // the miss so we don't re-attempt on every render.
+        iconLoading[key] = false;
+        faviconCache[key] = false;
+      }
     }
   }
 
@@ -2014,31 +2046,68 @@ if (barInput) {
         e.preventDefault();
         const file = items[i].getAsFile();
         if (!file) return;
-        if (barInput) barInput.value = '🔍 reverse image search…';
-        const fd = new FormData();
-        fd.append('encoded_image', file, file.name || 'pasted.png');
-        fd.append('image_url', '');
-        fd.append('image_content', '');
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', 'https://www.google.com/searchbyimage/upload');
-        xhr.onloadend = function () {
-          if (xhr.responseURL && xhr.responseURL.indexOf('http') === 0) {
-            closeBar();
-            openInNewTab(xhr.responseURL);
-          } else {
-            if (barInput) barInput.value = '';
-            if (barHint) barHint.textContent = 'image search failed';
-          }
-        };
-        xhr.onerror = function () {
-          if (barInput) barInput.value = '';
-          if (barHint) barHint.textContent = 'image search failed';
-        };
-        xhr.send(fd);
+        reverseImageSearch(file);
         return;
       }
     }
   });
+}
+
+/* Pasted images auto-trigger Google reverse image search (Lens) in a new tab.
+   Google deprecated the old www.google.com/searchbyimage/upload GET endpoint
+   (404s now), but the upload POST that images.google.com's own search box
+   uses still works — send the clipboard image as encoded_image there and open
+   the redirect target (the Lens/search results page). */
+let imageSearchTimer: ReturnType<typeof setTimeout> | null = null;
+function reverseImageSearch(file: File): void {
+  const priorText = barInput ? barInput.value : '';
+  if (barInput) barInput.value = '🔍 reverse image search...';
+  if (barHint) barHint.textContent = 'uploading image — opening results';
+
+  const fail = function (msg: string): void {
+    // Never leave the bar stuck on the "searching..." placeholder: restore the
+    // pre-paste text and surface why it didn't run.
+    if (barInput) barInput.value = priorText;
+    if (barHint) barHint.textContent = msg;
+  };
+
+  const fd = new FormData();
+  fd.append('encoded_image', file, file.name || 'pasted.png');
+  fd.append('image_url', '');
+  fd.append('image_content', '');
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', 'https://images.google.com/searchbyimage/upload');
+  if (imageSearchTimer) clearTimeout(imageSearchTimer);
+  imageSearchTimer = setTimeout(function () {
+    try { xhr.abort(); } catch { /* noop */ }
+    fail('image search timed out — try again');
+  }, 20000);
+
+  xhr.onloadend = function () {
+    if (imageSearchTimer) { clearTimeout(imageSearchTimer); imageSearchTimer = null; }
+    const status = xhr.status;
+    // Google answers the upload with a redirect (302 → the Lens/search page).
+    // XHR follows redirects, so a healthy response is 2xx/3xx whose responseURL
+    // landed somewhere real. If it didn't redirect (old 404/blank page) the URL
+    // is the bare upload endpoint — treat that as a failure rather than opening
+    // a dead page.
+    const rurl = xhr.responseURL || '';
+    const landed = /^https?:\/\//i.test(rurl) &&
+      rurl.indexOf('/searchbyimage/upload') === -1 &&
+      rurl.indexOf('images.google.com/searchbyimage/upload') === -1;
+    if (status >= 200 && status < 400 && landed) {
+      closeBar();
+      openInNewTab(rurl);
+    } else {
+      fail('image search failed — try again');
+    }
+  };
+  xhr.onerror = function () {
+    if (imageSearchTimer) { clearTimeout(imageSearchTimer); imageSearchTimer = null; }
+    fail('image search failed — check connection');
+  };
+  xhr.send(fd);
 }
 
 if (bar) {

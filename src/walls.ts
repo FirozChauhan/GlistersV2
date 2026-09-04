@@ -12,13 +12,30 @@ const REFRESH_MS = 24 * 60 * 60 * 1000;
 const WH_SEARCH = 'https://wallhaven.cc/api/v1/search?sorting=toplist&topRange=1M' +
   '&per_page=24';
 
-const PURE_OPTS = ['100', '110', '111'];
+// Wallhaven's purity/category params are 3-char bitmasks in the order
+// [SFW/General, Sketchy/Anime, NSFW/People]. The category buttons below
+// already use exclusive masks (100/010/001) so each means exactly one tier.
+// Purity used CUMULATIVE masks instead (100/110/111), so "sketchy" and
+// "nsfw" just stacked content on top of SFW — and since the 1M toplist is
+// SFW-dominated, every button returned essentially the same set. Make purity
+// exclusive too: sfw=100, sketchy=010, nsfw=001.
+const PURE_OPTS = ['100', '010', '001'];
 const CAT_OPTS = ['100', '010', '001'];
 const KEY_RE = /^[A-Za-z0-9]{8,64}$/;
 
 function cleanKey(v: string): string {
   const k = String(v == null ? '' : v).trim();
   return k ? (KEY_RE.test(k) ? k : '') : '';
+}
+
+// Normalise a stored purity value. Migrates the legacy cumulative codes
+// (110/111) that made the buttons overlap onto the new exclusive ones so a
+// previously-saved "nsfw" still means the nsfw tier, not "everything".
+function normalizePurity(v: unknown): string {
+  const s = String(v == null ? '' : v);
+  if (s === '110') return '010';
+  if (s === '111') return '001';
+  return PURE_OPTS.indexOf(s) !== -1 ? s : '100';
 }
 
 const CFG = (window.CONFIG || {}) as Config;
@@ -266,7 +283,7 @@ function setData(d: WallsDoc | null): void {
   state.key = d && typeof d.key === 'string' && (d.key === '' || isUrl(d.key))
     ? d.key : null;
   state.lastRefresh = d && typeof d.lastRefresh === 'number' ? d.lastRefresh : 0;
-  state.purity = d && PURE_OPTS.indexOf(String(d.purity)) !== -1 ? String(d.purity) : '100';
+  state.purity = normalizePurity(d && d.purity);
   state.category = d && CAT_OPTS.indexOf(String(d.category)) !== -1 ? String(d.category) : '100';
   state.apikey = d && typeof d.apikey === 'string' ? cleanKey(d.apikey) : '';
   if (!state.apikey) state.apikey = CFG_KEY;
@@ -948,7 +965,7 @@ let keyInput: HTMLInputElement | null = null;
 function renderFilterButtons(): void {
   if (purityBtns && categoryBtns) {
     purityBtns.forEach(function (b: HTMLButtonElement) {
-      if (b.dataset.wallPurity === '111') {
+      if (b.dataset.wallPurity === '001') {
         b.disabled = !state.apikey;
         b.title = state.apikey ? '' : 'requires a wallhaven API key';
       }
@@ -967,7 +984,7 @@ function renderFilterButtons(): void {
 function setFilter(type: string, value: string): Promise<boolean> {
   const opts = type === 'purity' ? PURE_OPTS : CAT_OPTS;
   if (opts.indexOf(value) === -1) return Promise.resolve(false);
-  if (type === 'purity' && value === '111' && !state.apikey) return Promise.resolve(false);
+  if (type === 'purity' && value === '001' && !state.apikey) return Promise.resolve(false);
   const key = type === 'purity' ? 'purity' : 'category';
   if (state[key] === value) return Promise.resolve(true);
   state[key] = value;
@@ -981,9 +998,9 @@ function setKey(v: string): Promise<boolean> {
   if (key === state.apikey) return Promise.resolve(true);
   state.apikey = key;
   touch();
-  if (state.purity === '111') {
+  if (state.purity === '001') {
     if (!key) {
-      state.purity = '110';
+      state.purity = '010'; // no NSFW without a key — fall back to sketchy
       touch();
     }
     renderFilterButtons();

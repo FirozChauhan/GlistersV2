@@ -512,6 +512,18 @@
           b.parentNode.replaceChild(nb, b);
           renderTileStates();
         }
+        function refreshKeyTile(key) {
+          if (!key || !grid || mode !== "none" || dragUi) return;
+          for (let i = pageStart(); i <= pageEnd(); i++) {
+            const s = state.sites[i];
+            if (!s || s.url !== key) continue;
+            const t = grid.querySelector('.tile[data-idx="' + i + '"]');
+            if (!t) continue;
+            const hasIcon = !!t.querySelector(".icon img.loaded");
+            if (!hasIcon) replaceTile(i);
+            return;
+          }
+        }
         function retryAllFailed() {
           if (mode !== "none" || dragUi) return;
           let any = false;
@@ -608,6 +620,7 @@
                 faviconCache[key] = bestImg;
                 if (bestSrc) persistIcon(key, bestSrc);
                 else if (bestImg.src) persistIcon(key, bestImg.src);
+                refreshKeyTile(key);
               }
             } else if (key) {
               faviconCache[key] = false;
@@ -773,6 +786,10 @@
             } else {
               const cands = iconCandidates(site, iconDeep);
               if (cands.length) loadIcon(ic, letter, cands, key);
+              else {
+                iconLoading[key] = false;
+                faviconCache[key] = false;
+              }
             }
           }
           const editBtn = el("span", "ctx-btn ctx-edit");
@@ -2016,31 +2033,58 @@
                 e.preventDefault();
                 const file = items[i].getAsFile();
                 if (!file) return;
-                if (barInput) barInput.value = "🔍 reverse image search…";
-                const fd = new FormData();
-                fd.append("encoded_image", file, file.name || "pasted.png");
-                fd.append("image_url", "");
-                fd.append("image_content", "");
-                const xhr = new XMLHttpRequest();
-                xhr.open("POST", "https://www.google.com/searchbyimage/upload");
-                xhr.onloadend = function() {
-                  if (xhr.responseURL && xhr.responseURL.indexOf("http") === 0) {
-                    closeBar();
-                    openInNewTab(xhr.responseURL);
-                  } else {
-                    if (barInput) barInput.value = "";
-                    if (barHint) barHint.textContent = "image search failed";
-                  }
-                };
-                xhr.onerror = function() {
-                  if (barInput) barInput.value = "";
-                  if (barHint) barHint.textContent = "image search failed";
-                };
-                xhr.send(fd);
+                reverseImageSearch(file);
                 return;
               }
             }
           });
+        }
+        let imageSearchTimer = null;
+        function reverseImageSearch(file) {
+          const priorText = barInput ? barInput.value : "";
+          if (barInput) barInput.value = "🔍 reverse image search...";
+          if (barHint) barHint.textContent = "uploading image — opening results";
+          const fail = function(msg) {
+            if (barInput) barInput.value = priorText;
+            if (barHint) barHint.textContent = msg;
+          };
+          const fd = new FormData();
+          fd.append("encoded_image", file, file.name || "pasted.png");
+          fd.append("image_url", "");
+          fd.append("image_content", "");
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", "https://images.google.com/searchbyimage/upload");
+          if (imageSearchTimer) clearTimeout(imageSearchTimer);
+          imageSearchTimer = setTimeout(function() {
+            try {
+              xhr.abort();
+            } catch {
+            }
+            fail("image search timed out — try again");
+          }, 2e4);
+          xhr.onloadend = function() {
+            if (imageSearchTimer) {
+              clearTimeout(imageSearchTimer);
+              imageSearchTimer = null;
+            }
+            const status = xhr.status;
+            const rurl = xhr.responseURL || "";
+            const landed = /^https?:\/\//i.test(rurl) && rurl.indexOf("/searchbyimage/upload") === -1 && rurl.indexOf("images.google.com/searchbyimage/upload") === -1;
+            if (status >= 200 && status < 400 && landed) {
+              closeBar();
+              openInNewTab(rurl);
+            } else {
+              fail("image search failed — try again");
+            }
+          };
+          xhr.onerror = function() {
+            if (imageSearchTimer) {
+              clearTimeout(imageSearchTimer);
+              imageSearchTimer = null;
+            }
+            fail("image search failed — check connection");
+          };
+          xhr.send(fd);
         }
         if (bar) {
           bar.addEventListener("mousedown", function(e) {
