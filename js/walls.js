@@ -474,11 +474,22 @@
         }
         function runtimeWallFetch(url) {
           if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
-            const viaBackground = chrome.runtime.sendMessage({ type: "wallFetch", url }).then(function(resp) {
-              if (resp && resp.ok && resp.data) return resp.data;
-              throw new Error(resp && resp.error ? resp.error : "wall fetch failed");
-            });
-            return viaBackground.catch(function(msgErr) {
+            return new Promise(function(resolve, reject) {
+              let done = false;
+              const onDone = function(resp) {
+                if (done) return;
+                done = true;
+                if (resp && resp.ok && resp.data) resolve(resp.data);
+                else reject(new Error(resp && resp.error ? resp.error : "wall fetch failed"));
+              };
+              try {
+                const ret = chrome.runtime.sendMessage({ type: "wallFetch", url }, onDone);
+                const p = ret;
+                if (p && typeof p.then === "function") p.then(onDone, onDone);
+              } catch (e) {
+                onDone({ ok: false, error: String(e) });
+              }
+            }).catch(function(msgErr) {
               return fetch(url, { cache: "no-store" }).then(function(r) {
                 if (!r.ok) throw new Error("wallhaven " + r.status);
                 return r.json();

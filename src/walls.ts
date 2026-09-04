@@ -482,14 +482,34 @@ function wallPage(page: number): Promise<{ meta?: { last_page: number }; data?: 
 function runtimeWallFetch(url: string): Promise<unknown> {
   if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
     // The background provably bypasses CORS for wallhaven (host_permissions).
-    // Firefox promisifies the chrome.* API, so sendMessage(msg) returns a
-    // Promise here. If the channel is unavailable (no background) fall back to a
-    // direct fetch, and surface the messaging reason if both fail.
-    const viaBackground = chrome.runtime.sendMessage({ type: 'wallFetch', url: url }).then(function (resp: any) {
-      if (resp && resp.ok && resp.data) return resp.data;
-      throw new Error(resp && resp.error ? resp.error : 'wall fetch failed');
-    });
-    return viaBackground.catch(function (msgErr: any) {
+    // chrome.runtime.sendMessage is callback-based in Chrome (Promise support is
+    // version-dependent) and promisified in Firefox, so DON'T assume the return
+    // value is a Promise (that threw, fell back to a direct fetch, and the page
+    // fetch was CORS-blocked because wallhaven sends no CORS headers — which is
+    // why every purity/category showed the same static fallback pool). Wrap the
+    // callback form in our own Promise so it works identically in both browsers.
+    return new Promise(function (resolve, reject) {
+      let done = false;
+      const onDone = function (resp: any): void {
+        if (done) return;
+        done = true;
+        if (resp && resp.ok && resp.data) resolve(resp.data);
+        else reject(new Error(resp && resp.error ? resp.error : 'wall fetch failed'));
+      };
+      try {
+        // The callback form returns void in the type defs, but some browsers
+        // also surface a Promise via the Promise-returning overload (Chrome 99+
+        // / Firefox). Capture whatever it actually returns and bridge a
+        // Promise-style result into the same callback so both work.
+        const ret = chrome.runtime.sendMessage({ type: 'wallFetch', url: url }, onDone) as unknown;
+        const p = ret as Promise<any> | undefined;
+        if (p && typeof p.then === 'function') p.then(onDone, onDone);
+      } catch (e) {
+        onDone({ ok: false, error: String(e) });
+      }
+    }).catch(function (msgErr: any) {
+      // Channel unavailable (e.g. no background, file:// dev) → try a direct
+      // fetch. Keep the messaging reason for the final error message.
       return fetch(url, { cache: 'no-store' }).then(function (r: Response) {
         if (!r.ok) throw new Error('wallhaven ' + r.status);
         return r.json();
