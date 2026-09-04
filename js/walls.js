@@ -473,12 +473,75 @@
           });
         }
         function runtimeWallFetch(url) {
-          if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
+          const directFetch = function() {
+            return fetch(url, { cache: "no-store" }).then(function(r) {
+              if (!r.ok) throw new Error("wallhaven " + r.status);
+              return r.json();
+            });
+          };
+          if (typeof browser !== "undefined" && browser && browser.runtime && browser.runtime.sendMessage) {
+            return new Promise(function(resolve, reject) {
+              const timer = setTimeout(function() {
+                reject(new Error("wall channel timeout"));
+              }, 15e3);
+              const settle = function(fn) {
+                clearTimeout(timer);
+                fn();
+              };
+              try {
+                browser.runtime.sendMessage({ type: "wallFetch", url }).then(
+                  function(resp) {
+                    settle(function() {
+                      if (resp && resp.ok && resp.data) resolve(resp.data);
+                      else reject(new Error(resp && resp.error ? resp.error : "wall fetch failed"));
+                    });
+                  },
+                  function(err) {
+                    settle(function() {
+                      reject(err instanceof Error ? err : new Error(String(err)));
+                    });
+                  }
+                );
+              } catch (e) {
+                settle(function() {
+                  reject(e instanceof Error ? e : new Error(String(e)));
+                });
+              }
+            }).catch(function() {
+              return new Promise(function(resolve2, reject2) {
+                setTimeout(function() {
+                  browser.runtime.sendMessage({ type: "wallFetch", url }).then(
+                    function(resp) {
+                      if (resp && resp.ok && resp.data) resolve2(resp.data);
+                      else reject2(new Error(resp && resp.error ? resp.error : "wall fetch failed"));
+                    },
+                    function(err) {
+                      reject2(err instanceof Error ? err : new Error(String(err)));
+                    }
+                  );
+                }, 400);
+              }).catch(function(msgErr) {
+                return directFetch().catch(function(directErr) {
+                  throw new Error((msgErr && msgErr.message ? msgErr.message : String(msgErr)) + " (direct: " + (directErr && directErr.message ? directErr.message : String(directErr)) + ")");
+                });
+              });
+            });
+          }
+          if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.sendMessage) {
+            return directFetch();
+          }
+          const viaChannel = function() {
             return new Promise(function(resolve, reject) {
               let done = false;
+              const timer = setTimeout(function() {
+                if (done) return;
+                done = true;
+                reject(new Error("wall channel timeout"));
+              }, 15e3);
               const onDone = function(resp) {
                 if (done) return;
                 done = true;
+                clearTimeout(timer);
                 if (resp && resp.ok && resp.data) resolve(resp.data);
                 else reject(new Error(resp && resp.error ? resp.error : "wall fetch failed"));
               };
@@ -489,18 +552,18 @@
               } catch (e) {
                 onDone({ ok: false, error: String(e) });
               }
-            }).catch(function(msgErr) {
-              return fetch(url, { cache: "no-store" }).then(function(r) {
-                if (!r.ok) throw new Error("wallhaven " + r.status);
-                return r.json();
-              }).catch(function(directErr) {
-                throw new Error((msgErr && msgErr.message ? msgErr.message : String(msgErr)) + " (direct: " + (directErr && directErr.message ? directErr.message : String(directErr)) + ")");
-              });
             });
-          }
-          return fetch(url, { cache: "no-store" }).then(function(r) {
-            if (!r.ok) throw new Error("wallhaven " + r.status);
-            return r.json();
+          };
+          return viaChannel().catch(function() {
+            return new Promise(function(resolve2, reject2) {
+              setTimeout(function() {
+                viaChannel().then(resolve2, reject2);
+              }, 400);
+            });
+          }).catch(function(msgErr) {
+            return directFetch().catch(function(directErr) {
+              throw new Error((msgErr && msgErr.message ? msgErr.message : String(msgErr)) + " (direct: " + (directErr && directErr.message ? directErr.message : String(directErr)) + ")");
+            });
           });
         }
         function wideShots(d) {

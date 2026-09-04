@@ -480,19 +480,85 @@ function wallPage(page: number): Promise<{ meta?: { last_page: number }; data?: 
 }
 
 function runtimeWallFetch(url: string): Promise<unknown> {
-  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-    // The background provably bypasses CORS for wallhaven (host_permissions).
-    // chrome.runtime.sendMessage is callback-based in Chrome (Promise support is
-    // version-dependent) and promisified in Firefox, so DON'T assume the return
-    // value is a Promise (that threw, fell back to a direct fetch, and the page
-    // fetch was CORS-blocked because wallhaven sends no CORS headers — which is
-    // why every purity/category showed the same static fallback pool). Wrap the
-    // callback form in our own Promise so it works identically in both browsers.
+  const directFetch = function (): Promise<unknown> {
+    return fetch(url, { cache: 'no-store' }).then(function (r: Response) {
+      if (!r.ok) throw new Error('wallhaven ' + r.status);
+      return r.json();
+    });
+  };
+  if (typeof browser !== 'undefined' && browser && browser.runtime &&
+      browser.runtime.sendMessage) {
+    // Firefox (and any browser exposing the promisified browser.* namespace):
+    // browser.runtime.sendMessage(msg) returns a Promise that REJECTS when the
+    // background doesn't answer ("Could not establish connection"), so channel
+    // death is detectable — unlike the chrome.* callback form, which in Firefox
+    // may simply never fire. Note Firefox IGNORES a listener's `return true`
+    // (Chrome convention); the background listener therefore returns a Promise
+    // (see background.js). Timeout-guarded here too, for belt and braces.
     return new Promise(function (resolve, reject) {
+      const timer = setTimeout(function () {
+        reject(new Error('wall channel timeout'));
+      }, 15000);
+      const settle = function (fn: () => void): void {
+        clearTimeout(timer);
+        fn();
+      };
+      try {
+        browser.runtime.sendMessage({ type: 'wallFetch', url: url }).then(
+          function (resp: any) {
+            settle(function () {
+              if (resp && resp.ok && resp.data) resolve(resp.data);
+              else reject(new Error(resp && resp.error ? resp.error : 'wall fetch failed'));
+            });
+          },
+          function (err: any) { settle(function () { reject(err instanceof Error ? err : new Error(String(err))); }); }
+        );
+      } catch (e) {
+        settle(function () { reject(e instanceof Error ? e : new Error(String(e))); });
+      }
+    }).catch(function () {
+      // Channel failed — retry once (worker may be idle-waking), then degrade.
+      return new Promise<unknown>(function (resolve2, reject2) {
+        setTimeout(function () {
+          browser.runtime.sendMessage({ type: 'wallFetch', url: url }).then(
+            function (resp: any) {
+              if (resp && resp.ok && resp.data) resolve2(resp.data);
+              else reject2(new Error(resp && resp.error ? resp.error : 'wall fetch failed'));
+            },
+            function (err: any) { reject2(err instanceof Error ? err : new Error(String(err))); }
+          );
+        }, 400);
+      }).catch(function (msgErr: any) {
+        return directFetch().catch(function (directErr: any) {
+          throw new Error((msgErr && msgErr.message ? msgErr.message : String(msgErr)) +
+            ' (direct: ' + (directErr && directErr.message ? directErr.message : String(directErr)) + ')');
+        });
+      });
+    });
+  }
+  if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) {
+    // No messaging runtime (e.g. file:// dev harness) → direct fetch.
+    return directFetch();
+  }
+  const viaChannel = function (): Promise<unknown> {
+    return new Promise(function (resolve, reject) {
+      // HARD TIMEOUT: if the background context is dead/unreachable (idle MV3
+      // service worker, orphaned channel after an extension reload, Firefox
+      // ignoring a `return true` listener), the sendMessage callback may never
+      // fire and the promise never settles — refreshPool's `refreshing` flag
+      // then stays true forever and EVERY later filter click is silently
+      // ignored (the "still the same" symptom). Race the callback against a
+      // timer so a dead channel degrades instead of wedging.
       let done = false;
+      const timer = setTimeout(function () {
+        if (done) return;
+        done = true;
+        reject(new Error('wall channel timeout'));
+      }, 15000);
       const onDone = function (resp: any): void {
         if (done) return;
         done = true;
+        clearTimeout(timer);
         if (resp && resp.ok && resp.data) resolve(resp.data);
         else reject(new Error(resp && resp.error ? resp.error : 'wall fetch failed'));
       };
@@ -507,22 +573,22 @@ function runtimeWallFetch(url: string): Promise<unknown> {
       } catch (e) {
         onDone({ ok: false, error: String(e) });
       }
-    }).catch(function (msgErr: any) {
-      // Channel unavailable (e.g. no background, file:// dev) → try a direct
-      // fetch. Keep the messaging reason for the final error message.
-      return fetch(url, { cache: 'no-store' }).then(function (r: Response) {
-        if (!r.ok) throw new Error('wallhaven ' + r.status);
-        return r.json();
-      }).catch(function (directErr: any) {
-        throw new Error((msgErr && msgErr.message ? msgErr.message : String(msgErr)) +
-          ' (direct: ' + (directErr && directErr.message ? directErr.message : String(directErr)) + ')');
-      });
     });
-  }
-  // No messaging runtime (e.g. file:// dev harness) → direct fetch.
-  return fetch(url, { cache: 'no-store' }).then(function (r: Response) {
-    if (!r.ok) throw new Error('wallhaven ' + r.status);
-    return r.json();
+  };
+  // Background-first: on ANY channel failure, retry the channel once (the MV3
+  // worker may just have been idle-waking), and only then degrade to a direct
+  // page fetch — which wallhaven always CORS-blocks (it sends no
+  // Access-Control-Allow-Origin header), so it is a last resort, never the
+  // primary path.
+  return viaChannel().catch(function () {
+    return new Promise<unknown>(function (resolve2, reject2) {
+      setTimeout(function () { viaChannel().then(resolve2, reject2); }, 400);
+    });
+  }).catch(function (msgErr: any) {
+    return directFetch().catch(function (directErr: any) {
+      throw new Error((msgErr && msgErr.message ? msgErr.message : String(msgErr)) +
+        ' (direct: ' + (directErr && directErr.message ? directErr.message : String(directErr)) + ')');
+    });
   });
 }
 

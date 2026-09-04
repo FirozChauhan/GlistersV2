@@ -8,9 +8,15 @@
 // back to the page over runtime messaging. This is the standard MV3 pattern for
 // cross-origin API calls the page can't make on its own.
 //
-// Guards: if the page also works without a background (e.g. file:// dev), the
-// page falls back to a direct fetch when this channel is unavailable.
-
+// NOTE on keeping the channel open for async sendResponse:
+//   - Chrome (MV3 service worker) uses `return true` from the listener.
+//   - Firefox (MV3 event page) IGNORES `return true`; the listener must return
+//     a Promise and the channel stays open until it settles. Returning `true`
+//     on Firefox closed the channel immediately, so the page's sendMessage
+//     callback got `undefined` and every wallhaven request failed → the UI
+//     silently kept the old (fallback) pool and every filter looked identical.
+//   Returning a Promise works on BOTH browsers: Chrome ignores the return
+//   value but still honours the async sendResponse calls made before resolve.
 var api = (typeof browser !== 'undefined' && browser.runtime)
   ? browser.runtime
   : (typeof chrome !== 'undefined' && chrome.runtime ? chrome.runtime : null);
@@ -18,16 +24,16 @@ var api = (typeof browser !== 'undefined' && browser.runtime)
 if (api && api.onMessage) {
   api.onMessage.addListener(function (msg, sender, sendResponse) {
     if (!msg || msg.type !== 'wallFetch' || !msg.url) return undefined;
-    fetch(msg.url, { cache: 'no-store' })
-      .then(function (r) {
-        if (!r.ok) { sendResponse({ ok: false, error: 'wallhaven ' + r.status }); return; }
-        r.json().then(
-          function (j) { sendResponse({ ok: true, data: j }); },
-          function (e) { sendResponse({ ok: false, error: 'json: ' + e }); }
-        );
-      })
-      .catch(function (e) { sendResponse({ ok: false, error: String(e) }); });
-    // Returning true keeps the message channel open for the async sendResponse.
-    return true;
+    return new Promise(function (resolve) {
+      fetch(msg.url, { cache: 'no-store' })
+        .then(function (r) {
+          if (!r.ok) { sendResponse({ ok: false, error: 'wallhaven ' + r.status }); resolve(false); return; }
+          r.json().then(
+            function (j) { sendResponse({ ok: true, data: j }); resolve(true); },
+            function (e) { sendResponse({ ok: false, error: 'json: ' + e }); resolve(false); }
+          );
+        })
+        .catch(function (e) { sendResponse({ ok: false, error: String(e) }); resolve(false); });
+    });
   });
 }

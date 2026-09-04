@@ -203,6 +203,9 @@ interface GridMeasure {
 }
 
 /* ─── Window globals ─── */
+/* Firefox promisified extension namespace (absent in Chrome). Declared `any`:
+   we only use runtime.sendMessage's Promise form here. */
+declare const browser: any;
 interface Window {
   CONFIG: Config;
   SYNC: SyncClient;
