@@ -2053,61 +2053,102 @@ if (barInput) {
   });
 }
 
-/* Pasted images auto-trigger Google reverse image search (Lens) in a new tab.
-   Google deprecated the old www.google.com/searchbyimage/upload GET endpoint
-   (404s now), but the upload POST that images.google.com's own search box
-   uses still works — send the clipboard image as encoded_image there and open
-   the redirect target (the Lens/search results page). */
+/* Pasted images auto-trigger Google Lens reverse image search in a new tab.
+   Google retired the old searchbyimage/upload endpoint (it now 400s) and the
+   Lens replacement (lens.google.com/v3/upload) 403s requests whose Origin
+   header is an extension origin. Workaround: submit the upload from a
+   sandboxed iframe (lens-relay.html) — an opaque-origin frame sends
+   `Origin: null`, which Google accepts — as a form POST targeting _blank, so
+   the browser follows Google's redirect straight to the results page. */
+const LENS_RELAY_SRC = 'lens-relay.html';
+let lensSeq = 0;
+const lensPending: { [id: string]: (r: { ok?: boolean; error?: string }) => void } = {};
+
+function lensFrame(): HTMLIFrameElement {
+  let frame = document.getElementById('lensRelay') as HTMLIFrameElement | null;
+  if (!frame) {
+    frame = document.createElement('iframe');
+    frame.id = 'lensRelay';
+    frame.title = 'image search relay';
+    frame.src = LENS_RELAY_SRC;
+    // allow-popups-to-escape-sandbox: without it the results tab inherits the
+    // sandbox and Google's redirect into it gets blocked (ERR_BLOCKED_BY_RESPONSE).
+    frame.setAttribute('sandbox', 'allow-scripts allow-popups allow-popups-to-escape-sandbox');
+    frame.hidden = true;
+    document.body.appendChild(frame);
+  }
+  return frame;
+}
+
+function lensUpload(file: File): Promise<{ ok?: boolean; error?: string }> {
+  return new Promise(function (resolve) {
+    const frame = lensFrame();
+    const id = 'lens-' + (++lensSeq);
+    lensPending[id] = resolve;
+    const post = function (): void {
+      if (frame.contentWindow) {
+        frame.contentWindow.postMessage({ type: 'lens-upload', id: id, file: file }, '*');
+      } else {
+        const cb = lensPending[id];
+        delete lensPending[id];
+        if (cb) cb({ error: 'relay frame unavailable' });
+      }
+    };
+    if (frame.dataset.ready === '1') post();
+    else frame.addEventListener('load', function () {
+      frame.dataset.ready = '1';
+      post();
+    });
+  });
+}
+
+window.addEventListener('message', function (e: MessageEvent) {
+  const d = e.data as { type?: string; id?: string; ok?: boolean; error?: string } | null;
+  if (!d || d.type !== 'lens-result' || !d.id) return;
+  const cb = lensPending[d.id];
+  if (!cb) return;
+  const frame = document.getElementById('lensRelay') as HTMLIFrameElement | null;
+  if (!frame || e.source !== frame.contentWindow) return;
+  delete lensPending[d.id];
+  cb({ ok: d.ok, error: d.error });
+});
+
 let imageSearchTimer: ReturnType<typeof setTimeout> | null = null;
 function reverseImageSearch(file: File): void {
   const priorText = barInput ? barInput.value : '';
   if (barInput) barInput.value = '🔍 reverse image search...';
   if (barHint) barHint.textContent = 'uploading image — opening results';
 
+  let settled = false;
   const fail = function (msg: string): void {
     // Never leave the bar stuck on the "searching..." placeholder: restore the
     // pre-paste text and surface why it didn't run.
+    if (settled) return;
+    settled = true;
+    if (imageSearchTimer) { clearTimeout(imageSearchTimer); imageSearchTimer = null; }
     if (barInput) barInput.value = priorText;
     if (barHint) barHint.textContent = msg;
   };
 
-  const fd = new FormData();
-  fd.append('encoded_image', file, file.name || 'pasted.png');
-  fd.append('image_url', '');
-  fd.append('image_content', '');
-
-  const xhr = new XMLHttpRequest();
-  xhr.open('POST', 'https://images.google.com/searchbyimage/upload');
   if (imageSearchTimer) clearTimeout(imageSearchTimer);
   imageSearchTimer = setTimeout(function () {
-    try { xhr.abort(); } catch { /* noop */ }
+    imageSearchTimer = null;
     fail('image search timed out — try again');
   }, 20000);
 
-  xhr.onloadend = function () {
+  lensUpload(file).then(function (res) {
+    if (settled) return;
     if (imageSearchTimer) { clearTimeout(imageSearchTimer); imageSearchTimer = null; }
-    const status = xhr.status;
-    // Google answers the upload with a redirect (302 → the Lens/search page).
-    // XHR follows redirects, so a healthy response is 2xx/3xx whose responseURL
-    // landed somewhere real. If it didn't redirect (old 404/blank page) the URL
-    // is the bare upload endpoint — treat that as a failure rather than opening
-    // a dead page.
-    const rurl = xhr.responseURL || '';
-    const landed = /^https?:\/\//i.test(rurl) &&
-      rurl.indexOf('/searchbyimage/upload') === -1 &&
-      rurl.indexOf('images.google.com/searchbyimage/upload') === -1;
-    if (status >= 200 && status < 400 && landed) {
+    // The relay submits the form itself; the browser opens the results tab.
+    // We only learn whether the submit went out — success means "the tab is
+    // on its way", so close the bar and trust the navigation.
+    if (res.ok) {
+      settled = true;
       closeBar();
-      openInNewTab(rurl);
     } else {
-      fail('image search failed — try again');
+      fail(res.error ? 'image search failed — check connection' : 'image search failed — try again');
     }
-  };
-  xhr.onerror = function () {
-    if (imageSearchTimer) { clearTimeout(imageSearchTimer); imageSearchTimer = null; }
-    fail('image search failed — check connection');
-  };
-  xhr.send(fd);
+  });
 }
 
 if (bar) {
@@ -2312,19 +2353,56 @@ function pushCloud(): void {
     setSyncStatus('synced', 'synced just now');
     updateStorageInfo();
   };
-  window.SYNC.push(d).then(onOk, function () {
-    dirty = true;
-    setSyncStatus('error', 'offline — will retry');
-    if (retryTimer) clearTimeout(retryTimer);
-    retryTimer = setTimeout(function () { pushCloud(); }, 20000);
-  });
+  const doPush = function (payload: SaveDoc): void {
+    /* Keep a small rolling log of what we last pushed (localStorage key
+       glisters-save:pushlog, newest first, max 5). If the Gist is ever
+       clobbered again, the user's own browser holds recent copies — no
+       API archaeology needed. */
+    try {
+      const key = 'glisters-save:pushlog';
+      let log: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+      if (!Array.isArray(log)) log = [];
+      log.unshift(JSON.stringify(payload));
+      while (log.length > 5) log.pop();
+      localStorage.setItem(key, JSON.stringify(log));
+    } catch { /* quota — best-effort only */ }
+    window.SYNC.push(payload).then(onOk, function () {
+      dirty = true;
+      setSyncStatus('error', 'offline — will retry');
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = setTimeout(function () { pushCloud(); }, 20000);
+    });
+  };
+  /* Anti-wipe guard: a fresh/empty profile (new device, reinstalled extension,
+     or an automated test instance seeded from links.txt) must never clobber
+     curated data in the cloud with its defaults. If this push would erase the
+     remote's favourites OR its link tiles, carry the remote lists instead.
+     Deliberate single removals still work: a non-empty local list pushes as-is,
+     and a genuine "remove the last one" is a local list that is shorter but
+     still non-empty — only an EMPTY local list is treated as a wipe risk. */
+  const lwallsw = d.walls as WallsDoc | null | undefined;
+  const lf = (lwallsw && Array.isArray(lwallsw.favs)) ? lwallsw.favs : [];
+  const lsites = Array.isArray(d.sites) ? d.sites : [];
+  if (lf.length && lsites.length && !seededFromLinks) { doPush(d); return; }
+  window.SYNC.pull().then(function (remote: SaveDoc | null) {
+    const rwallsw = remote && remote.walls ? remote.walls as WallsDoc : null;
+    const rf = (rwallsw && Array.isArray(rwallsw.favs)) ? rwallsw.favs : [];
+    if (!lf.length && rf.length) {
+      const w = (d.walls as WallsDoc | null | undefined) || ({} as WallsDoc);
+      w.favs = rf;
+      d.walls = w;
+    }
+    const rsites = remote && Array.isArray(remote.sites) ? remote.sites : [];
+    if ((!lsites.length || seededFromLinks) && rsites.length) d.sites = rsites;
+    doPush(d);
+  }).catch(function () { doPush(d); });
 }
 
 function pullCloud(): void {
-  if (!SYNC_ENABLED || !window.SYNC) return;
+  if (!SYNC_ENABLED || !window.SYNC) { cloudLoadingDone(); return; }
   setSyncStatus('syncing');
   window.SYNC.pull().then(function (remote: SaveDoc | null) {
-    if (!remote) { setSyncStatus('error', 'cloud empty'); bootstrapSync(); return; }
+    if (!remote) { setSyncStatus('error', 'cloud empty'); cloudLoadingDone(); bootstrapSync(); return; }
     const local = readLocal();
     // Favourites handling: the Gist is the source of truth, but if it lost its
     // favourites (the original bug) while the local state still has them, recover
@@ -2335,19 +2413,42 @@ function pullCloud(): void {
     if (rw && Array.isArray(rw.favs) && rw.favs.length === 0 && lw && Array.isArray(lw.favs) && lw.favs.length) {
       rw.favs = lw.favs;
     }
-    if (local && !local.updatedAt) { bootstrapSync(); return; }
+    if (local && !local.updatedAt) { cloudLoadingDone(); bootstrapSync(); return; }
+    /* A profile that was only ever seeded from links.txt (fresh install, headless
+       test instance) has no user data of its own — the cloud is authoritative.
+       Without this, the seed's fresh updatedAt wins the timestamp race and
+       clobbers the real link list. */
+    if (seededFromLinks && Array.isArray(remote.sites) && remote.sites.length) {
+      try { localStorage.removeItem(SEED_FLAG_KEY); } catch { /* noop */ }
+      seededFromLinks = false;
+      snapshotPrevious();
+      adopt(remote);
+      cloudLoadingDone();
+      setSyncStatus('synced', 'restored from cloud');
+      updateStorageInfo();
+      return;
+    }
     if (local && local.updatedAt && local.updatedAt > remote.updatedAt) {
+      cloudLoadingDone();
       pushCloud();
       return;
     }
     snapshotPrevious();
     adopt(remote);
+    cloudLoadingDone();
     setSyncStatus('synced', 'restored from cloud');
     updateStorageInfo();
   }).catch(function () {
     setSyncStatus('error', 'offline — will retry');
+    cloudLoadingDone();
     bootstrapSync();
   });
+}
+
+/* The walls grids show shimmer placeholders while the first pull of the
+   session is in flight; this ends that state once the pull resolves. */
+function cloudLoadingDone(): void {
+  if (window.WALLS && window.WALLS.setCloudLoading) window.WALLS.setCloudLoading(false);
 }
 
 function adopt(remote: SaveDoc): void {
@@ -2393,6 +2494,7 @@ function syncStart(): void {
   }
   setSyncStatus('ready', 'ready');
   updateStorageInfo();
+  if (window.WALLS && window.WALLS.setCloudLoading) window.WALLS.setCloudLoading(true);
   if (seededFromLinks) {
     pullCloud();
     return;

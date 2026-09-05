@@ -49,8 +49,12 @@
   </section>
 
   <form class="bar" id="bar" hidden>
-    <span class="bar-prompt" aria-hidden="true">:</span>
-    <input id="barInput" type="text" placeholder="url or site name · paste image to reverse-search" autocomplete="off" spellcheck="false" aria-label="command bar">
+    <div class="bar-line">
+      <span class="bar-prompt" aria-hidden="true">:</span>
+      <input id="barInput" type="text" placeholder="url or site name · paste image to reverse-search" autocomplete="off" spellcheck="false" aria-label="command bar">
+    </div>
+    <div class="bar-list" id="barList" role="listbox" hidden></div>
+    <div class="bar-hint" id="barHint" aria-live="polite"></div>
   </form>
 </main>
 

@@ -28,6 +28,7 @@ const version = manifest.version;
 const files = [
   ['manifest.firefox.json', 'manifest.json'],
   ['newtab.html', null],
+  ['lens-relay.html', null],
   ['popup.html', null],
   ['popup.js', null],
   ['background.js', null],

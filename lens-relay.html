@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Glisters image search relay</title>
+</head>
+<body>
+<!-- The form is submitted by js/lens-relay.js when app.ts posts a pasted
+     File in. It must live in this (opaque-origin) document so the browser
+     sends `Origin: null`, which Google's Lens upload accepts. -->
+<form id="lensForm" method="post" enctype="multipart/form-data" target="_blank">
+  <input id="lensFile" type="file" name="encoded_image">
+</form>
+<script src="js/lens-relay.js"></script>
+</body>
+</html>

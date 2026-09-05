@@ -18,6 +18,13 @@
         const cfg = { enabled: !!(gistId && githubToken) };
         const FILE_NAME = "glisters-save.json";
         const API = "https://api.github.com/gists";
+        function isAutomatedSession() {
+          try {
+            return navigator.webdriver === true;
+          } catch {
+            return false;
+          }
+        }
         function authHeader() {
           return "Bearer " + githubToken;
         }
@@ -44,6 +51,9 @@
         }
         function push(data) {
           if (!cfg.enabled) return Promise.reject(new Error("gist sync disabled"));
+          if (isAutomatedSession()) {
+            return Promise.reject(new Error("push blocked: automated browser session (test builds must use scripts/build-test.mjs)"));
+          }
           const files = {};
           files[FILE_NAME] = { content: JSON.stringify(data) };
           return fetch(API + "/" + encodeURIComponent(gistId), {

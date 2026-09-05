@@ -157,6 +157,7 @@
         };
         let appCommit = null;
         let refreshing = false;
+        let cloudLoading = false;
         let lastWallError = "";
         const wallEl = document.getElementById("wallLayer") || (function() {
           const d = document.createElement("div");
@@ -884,6 +885,11 @@
           wrap.appendChild(none);
           wrap.appendChild(el("span", "wall-label", "none"));
           grid.appendChild(wrap);
+          if (!state.list.length && cloudLoading) {
+            for (let i = 0; i < 4; i++) grid.appendChild(skeletonRow(i === 0 ? "loading…" : ""));
+            highlightCurrent();
+            return;
+          }
           state.list.forEach(function(u) {
             const w = el("div", "wall-item");
             const b = el("button", "wall-thumb");
@@ -971,10 +977,22 @@
           flashFav("favourites now the pool — w to cycle");
           return true;
         }
+        function skeletonRow(label) {
+          const wrap = el("div", "wall-item");
+          const sk = el("div", "wall-thumb wall-skel");
+          sk.setAttribute("aria-hidden", "true");
+          wrap.appendChild(sk);
+          wrap.appendChild(el("span", "wall-label wall-skel-label", label));
+          return wrap;
+        }
         function renderFavs() {
           if (!favGrid) return;
           favGrid.innerHTML = "";
           if (!state.favs.length) {
+            if (cloudLoading) {
+              for (let i = 0; i < 4; i++) favGrid.appendChild(skeletonRow(i === 0 ? "loading…" : ""));
+              return;
+            }
             const hint = el("button", "wall-thumb fav-empty");
             hint.type = "button";
             hint.title = "press f with a wallpaper to save it here";
@@ -1258,6 +1276,12 @@
           },
           download: function() {
             return downloadCurrent();
+          },
+          setCloudLoading: function(on) {
+            if (cloudLoading === on) return;
+            cloudLoading = on;
+            renderGrid();
+            renderFavs();
           }
         };
       })();

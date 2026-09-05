@@ -473,8 +473,9 @@ kbd {
   transform: translateX(-50%);
   z-index: 12;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
   width: min(420px, calc(100vw - 40px));
   background: var(--card);
   border: 1px solid var(--line);
@@ -482,6 +483,8 @@ kbd {
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
 }
 .bar:focus-within { box-shadow: 0 0 0 1px var(--line), 0 10px 28px rgba(0, 0, 0, 0.5); }
+
+.bar-line { display: flex; align-items: center; gap: 8px; }
 
 .bar-prompt { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
 
@@ -497,6 +500,58 @@ kbd {
   outline: none;
 }
 .bar input::placeholder { color: rgba(156, 156, 156, 0.5); }
+
+/* command bar — autocomplete dropdown + hint line (rendered by app.ts) */
+
+.bar-list { margin-top: 6px; border-top: 1px solid var(--line-soft); }
+.bar-list[hidden] { display: none; }
+
+.bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 4px;
+  background: transparent;
+  border: 0;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-align: left;
+  cursor: pointer;
+}
+.bar-row:hover, .bar-row.bar-sel { background: var(--surface); }
+
+.bar-glyph { flex: none; width: 12px; color: var(--muted); }
+.bar-label {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bar-cmd {
+  flex: 1;
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--muted);
+}
+
+.bar-hint {
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid var(--line-soft);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+}
+.bar-hint:empty { display: none; }
 
 /* ---------------------------------------------------------------------------
    scrim / drawer
@@ -1026,6 +1081,29 @@ input[type="range"]:focus-visible { outline: 1px solid var(--line); outline-offs
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.4);
 }
 .wall-thumb.failed { opacity: 0.35; }
+
+/* cloud-sync loading placeholders — shimmering thumbs shown in the walls
+   grids while the first Gist pull of the session is still in flight */
+.wall-skel {
+  cursor: default;
+  border-color: var(--line-soft);
+  background:
+    linear-gradient(100deg,
+      transparent 40%,
+      rgba(255, 255, 255, 0.07) 50%,
+      transparent 60%) -100% 0 / 200% 100% no-repeat,
+    var(--card);
+  animation: wall-shimmer 1.4s linear infinite;
+}
+.wall-skel:hover { transform: none; }
+.wall-skel-label { color: var(--muted); font-style: italic; }
+@keyframes wall-shimmer {
+  from { background-position: -100% 0, 0 0; }
+  to { background-position: 200% 0, 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wall-skel { animation: none; }
+}
 
 /* safe wallpaper tile — distinguished with a small corner tag */
 .wall-item.safe .wall-thumb { border-color: rgba(255, 255, 255, 0.45); }

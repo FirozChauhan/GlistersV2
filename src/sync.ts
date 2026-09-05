@@ -11,6 +11,17 @@ const cfg = { enabled: !!(gistId && githubToken) };
 const FILE_NAME = 'glisters-save.json';
 const API = 'https://api.github.com/gists';
 
+/* HARD SAFETY GUARD — automated sessions may never write to the live Gist.
+   Every browser-automation stack (Marionette/Selenium, Puppeteer, Playwright,
+   headless in general) sets navigator.webdriver to true; a real user's
+   browser never does. A headless test instance once pushed its seed link
+   list over the user's curated cloud data (2026-09-05) — this makes that
+   class of accident structurally impossible. Pulls stay allowed (read-only);
+   push is refused outright. */
+function isAutomatedSession(): boolean {
+  try { return navigator.webdriver === true; } catch { return false; }
+}
+
 function authHeader(): string {
   return 'Bearer ' + githubToken;
 }
@@ -33,6 +44,9 @@ function pull(): Promise<SaveDoc | null> {
 
 function push(data: SaveDoc): Promise<boolean> {
   if (!cfg.enabled) return Promise.reject(new Error('gist sync disabled'));
+  if (isAutomatedSession()) {
+    return Promise.reject(new Error('push blocked: automated browser session (test builds must use scripts/build-test.mjs)'));
+  }
   const files: Record<string, { content: string }> = {};
   files[FILE_NAME] = { content: JSON.stringify(data) };
   return fetch(API + '/' + encodeURIComponent(gistId), {

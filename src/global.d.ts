@@ -89,6 +89,7 @@ interface WallsClient {
   setSafe(): boolean;
   applySafe(): boolean;
   download(): Promise<boolean>;
+  setCloudLoading(on: boolean): void;
 }
 
 /* ─── BookmarksClient ─── */

@@ -10,7 +10,8 @@
     "build": "npm run gen-config && npm run gen-icons && npm run build:ts",
     "build:all": "npm run build && npm run build:firefox",
     "build:firefox": "node scripts/build-firefox.mjs",
-    "lint:firefox": "npx --yes web-ext lint --source-dir dist/firefox"
+    "lint:firefox": "npx --yes web-ext lint --source-dir dist/firefox",
+    "build:test": "node scripts/build-test.mjs"
   },
   "repository": {
     "type": "git",

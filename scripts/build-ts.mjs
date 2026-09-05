@@ -20,6 +20,7 @@ const ENTRIES = [
   ['walls', 'src/walls.ts', 'js/walls.js'],
   ['bookmarks', 'src/bookmarks.ts', 'js/bookmarks.js'],
   ['app', 'src/app.ts', 'js/app.js'],
+  ['lens-relay', 'src/lens-relay.ts', 'js/lens-relay.js'],
 ];
 
 const opts = {

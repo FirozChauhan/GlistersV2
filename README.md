@@ -64,8 +64,22 @@ Last-write-wins by `updatedAt`; the gist is always authoritative on boot, so a w
 ```bash
 npm run build          # config + icons + ts → js/
 npm run build:all      # + firefox zip (AMO-ready)
+npm run build:test     # test build → dist/firefox-test/ (Gist sync stripped)
 npm run typecheck
 ```
+
+### Testing safety — read before automating the extension
+
+**Never point an automated browser (Puppeteer/Selenium/Playwright) at the repo
+root or `dist/firefox/` — those carry the real Gist credentials.** A headless
+test instance once pushed its seed links over the user's curated cloud list.
+Always `npm run build:test` and load `dist/firefox-test/`: its `js/config.js`
+has blank credentials, so sync is physically disabled. As a runtime backstop,
+`src/sync.ts` refuses all pushes when `navigator.webdriver === true` (every
+automation stack sets it; a real browser never does). Reads/pulls stay allowed.
+The sync layer additionally refuses to push an empty favourites or links list
+over a non-empty cloud one, and a profile seeded from `links.txt` always
+adopts the cloud list instead of pushing the seed.
 
 ## License
 

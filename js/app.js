@@ -2039,52 +2039,87 @@
             }
           });
         }
+        const LENS_RELAY_SRC = "lens-relay.html";
+        let lensSeq = 0;
+        const lensPending = {};
+        function lensFrame() {
+          let frame = document.getElementById("lensRelay");
+          if (!frame) {
+            frame = document.createElement("iframe");
+            frame.id = "lensRelay";
+            frame.title = "image search relay";
+            frame.src = LENS_RELAY_SRC;
+            frame.setAttribute("sandbox", "allow-scripts allow-popups allow-popups-to-escape-sandbox");
+            frame.hidden = true;
+            document.body.appendChild(frame);
+          }
+          return frame;
+        }
+        function lensUpload(file) {
+          return new Promise(function(resolve) {
+            const frame = lensFrame();
+            const id = "lens-" + ++lensSeq;
+            lensPending[id] = resolve;
+            const post = function() {
+              if (frame.contentWindow) {
+                frame.contentWindow.postMessage({ type: "lens-upload", id, file }, "*");
+              } else {
+                const cb = lensPending[id];
+                delete lensPending[id];
+                if (cb) cb({ error: "relay frame unavailable" });
+              }
+            };
+            if (frame.dataset.ready === "1") post();
+            else frame.addEventListener("load", function() {
+              frame.dataset.ready = "1";
+              post();
+            });
+          });
+        }
+        window.addEventListener("message", function(e) {
+          const d = e.data;
+          if (!d || d.type !== "lens-result" || !d.id) return;
+          const cb = lensPending[d.id];
+          if (!cb) return;
+          const frame = document.getElementById("lensRelay");
+          if (!frame || e.source !== frame.contentWindow) return;
+          delete lensPending[d.id];
+          cb({ ok: d.ok, error: d.error });
+        });
         let imageSearchTimer = null;
         function reverseImageSearch(file) {
           const priorText = barInput ? barInput.value : "";
           if (barInput) barInput.value = "🔍 reverse image search...";
           if (barHint) barHint.textContent = "uploading image — opening results";
+          let settled = false;
           const fail = function(msg) {
+            if (settled) return;
+            settled = true;
+            if (imageSearchTimer) {
+              clearTimeout(imageSearchTimer);
+              imageSearchTimer = null;
+            }
             if (barInput) barInput.value = priorText;
             if (barHint) barHint.textContent = msg;
           };
-          const fd = new FormData();
-          fd.append("encoded_image", file, file.name || "pasted.png");
-          fd.append("image_url", "");
-          fd.append("image_content", "");
-          const xhr = new XMLHttpRequest();
-          xhr.open("POST", "https://images.google.com/searchbyimage/upload");
           if (imageSearchTimer) clearTimeout(imageSearchTimer);
           imageSearchTimer = setTimeout(function() {
-            try {
-              xhr.abort();
-            } catch {
-            }
+            imageSearchTimer = null;
             fail("image search timed out — try again");
           }, 2e4);
-          xhr.onloadend = function() {
+          lensUpload(file).then(function(res) {
+            if (settled) return;
             if (imageSearchTimer) {
               clearTimeout(imageSearchTimer);
               imageSearchTimer = null;
             }
-            const status = xhr.status;
-            const rurl = xhr.responseURL || "";
-            const landed = /^https?:\/\//i.test(rurl) && rurl.indexOf("/searchbyimage/upload") === -1 && rurl.indexOf("images.google.com/searchbyimage/upload") === -1;
-            if (status >= 200 && status < 400 && landed) {
+            if (res.ok) {
+              settled = true;
               closeBar();
-              openInNewTab(rurl);
             } else {
-              fail("image search failed — try again");
+              fail(res.error ? "image search failed — check connection" : "image search failed — try again");
             }
-          };
-          xhr.onerror = function() {
-            if (imageSearchTimer) {
-              clearTimeout(imageSearchTimer);
-              imageSearchTimer = null;
-            }
-            fail("image search failed — check connection");
-          };
-          xhr.send(fd);
+          });
         }
         if (bar) {
           bar.addEventListener("mousedown", function(e) {
@@ -2273,21 +2308,57 @@
             setSyncStatus("synced", "synced just now");
             updateStorageInfo();
           };
-          window.SYNC.push(d).then(onOk, function() {
-            dirty = true;
-            setSyncStatus("error", "offline — will retry");
-            if (retryTimer) clearTimeout(retryTimer);
-            retryTimer = setTimeout(function() {
-              pushCloud();
-            }, 2e4);
+          const doPush = function(payload) {
+            try {
+              const key = "glisters-save:pushlog";
+              let log = JSON.parse(localStorage.getItem(key) || "[]");
+              if (!Array.isArray(log)) log = [];
+              log.unshift(JSON.stringify(payload));
+              while (log.length > 5) log.pop();
+              localStorage.setItem(key, JSON.stringify(log));
+            } catch {
+            }
+            window.SYNC.push(payload).then(onOk, function() {
+              dirty = true;
+              setSyncStatus("error", "offline — will retry");
+              if (retryTimer) clearTimeout(retryTimer);
+              retryTimer = setTimeout(function() {
+                pushCloud();
+              }, 2e4);
+            });
+          };
+          const lwallsw = d.walls;
+          const lf = lwallsw && Array.isArray(lwallsw.favs) ? lwallsw.favs : [];
+          const lsites = Array.isArray(d.sites) ? d.sites : [];
+          if (lf.length && lsites.length && !seededFromLinks) {
+            doPush(d);
+            return;
+          }
+          window.SYNC.pull().then(function(remote) {
+            const rwallsw = remote && remote.walls ? remote.walls : null;
+            const rf = rwallsw && Array.isArray(rwallsw.favs) ? rwallsw.favs : [];
+            if (!lf.length && rf.length) {
+              const w = d.walls || {};
+              w.favs = rf;
+              d.walls = w;
+            }
+            const rsites = remote && Array.isArray(remote.sites) ? remote.sites : [];
+            if ((!lsites.length || seededFromLinks) && rsites.length) d.sites = rsites;
+            doPush(d);
+          }).catch(function() {
+            doPush(d);
           });
         }
         function pullCloud() {
-          if (!SYNC_ENABLED || !window.SYNC) return;
+          if (!SYNC_ENABLED || !window.SYNC) {
+            cloudLoadingDone();
+            return;
+          }
           setSyncStatus("syncing");
           window.SYNC.pull().then(function(remote) {
             if (!remote) {
               setSyncStatus("error", "cloud empty");
+              cloudLoadingDone();
               bootstrapSync();
               return;
             }
@@ -2298,21 +2369,41 @@
               rw.favs = lw.favs;
             }
             if (local && !local.updatedAt) {
+              cloudLoadingDone();
               bootstrapSync();
               return;
             }
+            if (seededFromLinks && Array.isArray(remote.sites) && remote.sites.length) {
+              try {
+                localStorage.removeItem(SEED_FLAG_KEY);
+              } catch {
+              }
+              seededFromLinks = false;
+              snapshotPrevious();
+              adopt(remote);
+              cloudLoadingDone();
+              setSyncStatus("synced", "restored from cloud");
+              updateStorageInfo();
+              return;
+            }
             if (local && local.updatedAt && local.updatedAt > remote.updatedAt) {
+              cloudLoadingDone();
               pushCloud();
               return;
             }
             snapshotPrevious();
             adopt(remote);
+            cloudLoadingDone();
             setSyncStatus("synced", "restored from cloud");
             updateStorageInfo();
           }).catch(function() {
             setSyncStatus("error", "offline — will retry");
+            cloudLoadingDone();
             bootstrapSync();
           });
+        }
+        function cloudLoadingDone() {
+          if (window.WALLS && window.WALLS.setCloudLoading) window.WALLS.setCloudLoading(false);
         }
         function adopt(remote) {
           const norm = normalize(remote);
@@ -2359,6 +2450,7 @@
           }
           setSyncStatus("ready", "ready");
           updateStorageInfo();
+          if (window.WALLS && window.WALLS.setCloudLoading) window.WALLS.setCloudLoading(true);
           if (seededFromLinks) {
             pullCloud();
             return;
