@@ -2,10 +2,10 @@
 
 Keyboard-first new tab extension — shortcut grid, live Chrome bookmarks, Wallhaven wallpapers, single-user GitHub Gist sync. No backend, no sign-in.
 
-![JavaScript](https://img.shields.io/badge/JavaScript-ES5-F7DF1E?logo=javascript&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
-![Chrome](https://img.shields.io/badge/Chrome-MV3-4285F4?logo=googlechrome&logoColor=white)
-![Firefox](https://img.shields.io/badge/Firefox-140%2B-FF7139?logo=firefox&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-161B22?style=for-the-badge&logo=javascript&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-161B22?style=for-the-badge&logo=typescript&logoColor=white)
+![Chrome](https://img.shields.io/badge/Chrome-161B22?style=for-the-badge&logo=googlechrome&logoColor=white)
+![Firefox](https://img.shields.io/badge/Firefox-161B22?style=for-the-badge&logo=firefox&logoColor=white)
 
 ## Install
 
